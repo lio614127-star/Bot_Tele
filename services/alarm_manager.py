@@ -1,66 +1,54 @@
+import threading
 import time
 import os
-import threading
-from datetime import datetime
 from utils.persistence import get_alarm_state, set_alarm_state
-from services.telegram_service import send_alarm_message, send_message
+from services.telegram_service import send_message
 from utils.logger import setup_logger
 
 logger = setup_logger()
 
-# Global state to prevent duplicate threads
-_alarm_thread = None
-_thread_lock = threading.Lock()
+# Shared global state
+alarm_thread = None
+alarm_lock = threading.Lock()
+
+def alarm_worker_loop():
+    """
+    Background worker that runs the alarm loop for the single user.
+    """
+    logger.info("Alarm worker loop started (Single-User).")
+    
+    interval = int(os.getenv('ALARM_INTERVAL', 10))
+    max_duration = int(os.getenv('MAX_ALARM_DURATION', 1200))
+    
+    while True:
+        state = get_alarm_state()
+        
+        if state.get('is_active'):
+            updated_at = state.get('updated_at', 0)
+            elapsed = time.time() - updated_at
+            
+            if elapsed > max_duration:
+                logger.info("Alarm duration exceeded. Auto-stopping.")
+                set_alarm_state(False)
+                send_message("ℹ️ **Báo động đã tự động dừng** (hết thời gian tối đa).")
+            else:
+                # Trigger actual sound/notification
+                tx = state.get('current_tx', {})
+                name = tx.get('wallet_name', 'N/A')
+                addr = tx.get('wallet_addr', 'N/A')
+                
+                logger.info(f"ALARM ACTIVE: {name} ({addr})")
+                send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>")
+        
+        time.sleep(interval)
 
 def start_alarm_thread():
     """
     Starts the background alarm thread if it's not already running.
     """
-    global _alarm_thread
-    with _thread_lock:
-        if _alarm_thread is None or not _alarm_thread.is_alive():
-            _alarm_thread = threading.Thread(target=alarm_worker_loop, daemon=True)
-            _alarm_thread.start()
-            logger.info("Background alarm thread started.")
-
-def alarm_worker_loop():
-    """
-    The background loop that spams alerts and checks for auto-stop.
-    """
-    logger.info("Alarm worker loop entering...")
-    
-    # Reload config frequently in case of env changes during dev
-    # In production, these are usually static
-    interval = int(os.getenv('ALARM_INTERVAL', 2))
-    max_duration = int(os.getenv('MAX_ALARM_DURATION', 1200)) # Default 20 mins
-    
-    while True:
-        state = get_alarm_state()
-        
-        if not state.get('is_active'):
-            logger.info("Alarm inactive. Worker loop exiting.")
-            break
-            
-        # Check for auto-stop
-        start_time = state.get('start_time')
-        if start_time:
-            elapsed = datetime.now().timestamp() - start_time
-            if elapsed > max_duration:
-                logger.info(f"Alarm exceeded max duration ({elapsed:.0f}s > {max_duration}s). Auto-stopping.")
-                set_alarm_state(False)
-                send_message("🚨 <b>Auto-stop activated</b>\nBáo động đã tự động dừng sau 20 phút để đảm bảo an toàn.")
-                break
-        
-        # Send alert
-        tx_data = state.get('current_tx')
-        if tx_data:
-            # tx_data expected to be a dict with 'amount', 'wallet', 'signature'
-            send_alarm_message(
-                amount=tx_data.get('amount', 0),
-                wallet=tx_data.get('wallet', 'Unknown'),
-                signature=tx_data.get('signature', '')
-            )
-        else:
-            logger.warning("Alarm active but no transaction data found.")
-            
-        time.sleep(interval)
+    global alarm_thread
+    with alarm_lock:
+        if alarm_thread is None or not alarm_thread.is_alive():
+            alarm_thread = threading.Thread(target=alarm_worker_loop, daemon=True)
+            alarm_thread.start()
+            logger.info("Alarm thread spawned.")
