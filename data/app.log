@@ -1,0 +1,18 @@
+2026-04-09 01:52:56,954 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.10:5000
+2026-04-09 01:52:56,954 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2026-04-09 01:53:27,548 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.10:5000
+2026-04-09 01:53:27,549 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2026-04-09 01:54:16,729 - werkzeug - INFO - [31m[1mWARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.[0m
+ * Running on all addresses (0.0.0.0)
+ * Running on http://127.0.0.1:5000
+ * Running on http://192.168.1.10:5000
+2026-04-09 01:54:16,731 - werkzeug - INFO - [33mPress CTRL+C to quit[0m
+2026-04-09 02:22:19,868 - CryptoAlarmBot - INFO - Detected outgoing transfer of 1.0 SOL from Address1111111111111111111111111111111111111 to Recipient
+2026-04-09 02:22:19,868 - CryptoAlarmBot - INFO - MATCH FOUND: Signature=sig1, Amount=1.0 SOL. Details: {'fromUser': 'Address1111111111111111111111111111111111111', 'toUser': 'Recipient', 'amount': 1000000000, 'wallet_name': 'Address1111111111111111111111111111111111111'}
+2026-04-09 02:24:58,525 - CryptoAlarmBot - CRITICAL - UNABLE TO START: Missing mandatory environment variables: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SECRET_TOKEN, TELEGRAM_SECRET, TARGET_WALLET, ALARM_INTERVAL, MAX_ALARM_DURATION

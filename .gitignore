@@ -1,0 +1,28 @@
+# Environments
+.env
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+env/
+venv/
+ENV/
+
+# Testing
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Data (Keep structure, ignore content)
+data/*.json
+!data/.gitkeep
+
+# IDEs
+.vscode/
+.idea/
+
+# Planning (Optional: keep or hide)
+#.planning/
