@@ -28,11 +28,16 @@ def sync_wallets_to_helius():
         get_response.raise_for_status()
         current_config = get_response.json()
         
-        # 2. Update the accountAddresses field
-        current_config['accountAddresses'] = addresses
+        # 2. Extract only valid fields for PUT request
+        payload = {
+            "webhookURL": current_config.get("webhookURL"),
+            "transactionTypes": current_config.get("transactionTypes", ["TRANSFER"]),
+            "accountAddresses": addresses,
+            "webhookType": current_config.get("webhookType", "enhanced")
+        }
         
         # 3. PUT the updated config
-        put_response = requests.put(url, json=current_config, timeout=10)
+        put_response = requests.put(url, json=payload, timeout=10)
         put_response.raise_for_status()
         
         logger.info(f"Successfully synced {len(addresses)} wallets to Helius.")
