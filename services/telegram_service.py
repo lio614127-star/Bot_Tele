@@ -7,6 +7,7 @@ from utils.logger import setup_logger
 from utils.persistence import (
     set_alarm_state, get_alarm_state, load_wallets, add_wallet, remove_wallet
 )
+from services.helius_service import sync_wallets_to_helius
 
 logger = setup_logger()
 
@@ -172,6 +173,10 @@ def handle_webhook(payload):
                     results.append(f"❌ <code>{line[:15]}</code>: Lỗi số.")
             
             if results:
+                # Sync with Helius
+                sync_success, sync_note = sync_wallets_to_helius()
+                results.append(f"\n🔄 <b>Helius Sync:</b>\n{sync_note}")
+                
                 send_message("📝 **Kết quả cập nhật:**\n" + "\n".join(results))
                 
         elif text.startswith('/remove'):
@@ -182,6 +187,11 @@ def handle_webhook(payload):
             
             address = parts[1]
             success, note = remove_wallet(address)
+            
+            if success:
+                sync_success, sync_note = sync_wallets_to_helius()
+                note += f"\n\n🔄 <b>Helius Sync:</b>\n{sync_note}"
+                
             send_message(f"{'🗑️' if success else '❌'} {note}")
 
     elif callback_query:
