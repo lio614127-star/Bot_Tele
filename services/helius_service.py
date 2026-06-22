@@ -20,7 +20,12 @@ def sync_wallets_to_helius():
     
     # Get current wallets
     wallets = load_wallets()
-    addresses = [w['address'] for w in wallets]
+    addresses = [w['address'] for w in wallets if w.get('is_active', True)]
+    
+    # Helius API does not allow an empty accountAddresses list.
+    # If the user removes all wallets, we supply a dummy address (System Program).
+    if not addresses:
+        addresses = ["11111111111111111111111111111111"]
     
     try:
         # 1. GET current webhook config so we don't overwrite other settings like URL
