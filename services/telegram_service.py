@@ -155,7 +155,12 @@ def handle_webhook(payload):
                 parts = line.split()
                 if parts[0] == '/add': parts = parts[1:]
                 if len(parts) < 3:
-                    if len(lines) == 1: send_message("❌ **Sai cú pháp:** <code>/add addr min max [tên]</code>")
+                    if len(lines) == 1: 
+                        send_message(
+                            "📝 <b>Hướng dẫn thêm ví:</b>\n"
+                            "Bạn hãy chạm vào dòng lệnh mẫu dưới đây để copy, sau đó dán ra và sửa lại thông tin của bạn nhé:\n\n"
+                            "<code>/add Địa_Chỉ_Ví_Solana 1 100 Tên_Ví</code>"
+                        )
                     continue 
                 
                 address = parts[0]
@@ -183,7 +188,11 @@ def handle_webhook(payload):
         elif text.startswith('/remove'):
             parts = text.split()
             if len(parts) < 2:
-                send_message("❌ **Cú pháp:** <code>/remove addr</code>")
+                send_message(
+                    "📝 <b>Hướng dẫn xóa ví:</b>\n"
+                    "Bạn hãy chạm vào dòng lệnh mẫu dưới đây để copy, sau đó dán ra và thay bằng địa chỉ ví cần xóa nhé:\n\n"
+                    "<code>/remove Địa_Chỉ_Ví_Solana</code>"
+                )
                 return
             
             address = parts[1]
