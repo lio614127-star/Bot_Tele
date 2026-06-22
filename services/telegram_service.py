@@ -166,8 +166,11 @@ def handle_webhook(payload):
                             results.append(f"❌ <code>{address[:8]}...</code>: Địa chỉ sai.")
                             continue
                         success, note = add_wallet(address, min_sol, max_sol, name)
-                        if success: has_success = True
-                        results.append(f"✅ {note}")
+                        if success:
+                            has_success = True
+                            results.append(f"✅ {note}")
+                        else:
+                            results.append(f"❌ {note}")
                     except ValueError:
                         results.append(f"❌ <code>{line[:15]}...</code>: Lỗi số min/max.")
                 

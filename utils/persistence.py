@@ -111,12 +111,7 @@ def add_wallet(address, min_sol=0.0, max_sol=1000000.0, name=None):
     # Check if wallet already exists
     for wallet in wallets:
         if wallet['address'] == address:
-            wallet['min_sol'] = min_sol
-            wallet['max_sol'] = max_sol
-            wallet['name'] = name
-            wallet['is_active'] = True # Reactivate if it was paused
-            save_wallets(wallets)
-            return True, f"Đã cập nhật ví: <code>{address}</code> - {name} - {min_sol} đến {max_sol} SOL."
+            return False, f"Ví <code>{address[:8]}...</code> đã tồn tại trong danh sách."
     
     # Add new wallet
     wallets.append({
