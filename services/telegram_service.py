@@ -150,6 +150,7 @@ def handle_webhook(payload):
             lines = text.strip().split('\n')
             results = []
             
+            has_success = False
             for line in lines:
                 parts = line.split()
                 if parts[0] == '/add': parts = parts[1:]
@@ -160,7 +161,6 @@ def handle_webhook(payload):
                 address = parts[0]
                 try:
                     min_sol, max_sol = float(parts[1]), float(parts[2])
-                    # Name is everything from parts[3:]
                     name = " ".join(parts[3:]) if len(parts) > 3 else None
                     
                     if not is_valid_solana_address(address):
@@ -168,14 +168,15 @@ def handle_webhook(payload):
                         continue
 
                     success, note = add_wallet(address, min_sol, max_sol, name)
+                    if success: has_success = True
                     results.append(f"✅ {note}")
                 except ValueError:
                     results.append(f"❌ <code>{line[:15]}</code>: Lỗi số.")
             
             if results:
-                # Sync with Helius
-                sync_success, sync_note = sync_wallets_to_helius()
-                results.append(f"\n🔄 <b>Helius Sync:</b>\n{sync_note}")
+                if has_success:
+                    sync_success, sync_note = sync_wallets_to_helius()
+                    results.append(f"\n🔄 <b>Helius Sync:</b>\n{sync_note}")
                 
                 send_message("📝 **Kết quả cập nhật:**\n" + "\n".join(results))
                 
