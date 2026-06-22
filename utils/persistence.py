@@ -7,25 +7,56 @@ DATA_DIR = os.path.join(os.path.dirname(os.path.dirname(__file__)), 'data')
 SIGNATURES_FILE = os.path.join(DATA_DIR, 'signatures.json')
 ALARM_STATE_FILE = os.path.join(DATA_DIR, 'alarm_state.json')
 WALLETS_FILE = os.path.join(DATA_DIR, 'wallets.json')
+USER_STATES_FILE = os.path.join(DATA_DIR, 'user_states.json')
 
 def ensure_data_files():
     """Ensure data directory and required files exist."""
     if not os.path.exists(DATA_DIR):
         os.makedirs(DATA_DIR)
         
-    for file_path in [SIGNATURES_FILE, ALARM_STATE_FILE, WALLETS_FILE]:
+    for file_path in [SIGNATURES_FILE, ALARM_STATE_FILE, WALLETS_FILE, USER_STATES_FILE]:
         if not os.path.exists(file_path):
             with open(file_path, 'w', encoding='utf-8') as f:
                 if 'wallets' in file_path:
                     json.dump([], f)
-                elif 'state' in file_path:
+                elif 'alarm_state' in file_path:
                     json.dump({'is_active': False, 'current_tx': None}, f)
+                elif 'user_states' in file_path:
+                    json.dump({}, f)
                 else:
                     json.dump([], f)
     
     # Initialize .gitkeep
     with open(os.path.join(DATA_DIR, '.gitkeep'), 'a') as f:
         pass
+
+# --- User States (Conversation) ---
+
+def get_user_state(chat_id):
+    ensure_data_files()
+    try:
+        with open(USER_STATES_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+            return data.get(str(chat_id))
+    except (FileNotFoundError, json.JSONDecodeError):
+        return None
+
+def set_user_state(chat_id, state):
+    ensure_data_files()
+    try:
+        with open(USER_STATES_FILE, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+    except:
+        data = {}
+        
+    if state is None:
+        if str(chat_id) in data:
+            del data[str(chat_id)]
+    else:
+        data[str(chat_id)] = state
+        
+    with open(USER_STATES_FILE, 'w', encoding='utf-8') as f:
+        json.dump(data, f, indent=4)
 
 # --- Wallet Management (Single User / Multi Wallet) ---
 
@@ -46,10 +77,20 @@ def load_wallets():
                             # Add default name if missing
                             if 'name' not in w:
                                 w['name'] = f"Ví_{w['address'][:4]}"
+                            w['is_active'] = w.get('is_active', True)
                             merged_wallets.append(w)
                             seen_addresses.add(w['address'])
                 save_wallets(merged_wallets)
                 return merged_wallets
+                
+            # Ensure is_active exists for all existing flat wallets
+            updated = False
+            for w in data:
+                if 'is_active' not in w:
+                    w['is_active'] = True
+                    updated = True
+            if updated:
+                save_wallets(data)
                 
             return data
     except (FileNotFoundError, json.JSONDecodeError):
@@ -73,6 +114,7 @@ def add_wallet(address, min_sol=0.0, max_sol=1000000.0, name=None):
             wallet['min_sol'] = min_sol
             wallet['max_sol'] = max_sol
             wallet['name'] = name
+            wallet['is_active'] = True # Reactivate if it was paused
             save_wallets(wallets)
             return True, f"Đã cập nhật ví '{name}'."
     
@@ -81,7 +123,8 @@ def add_wallet(address, min_sol=0.0, max_sol=1000000.0, name=None):
         'address': address,
         'name': name,
         'min_sol': min_sol,
-        'max_sol': max_sol
+        'max_sol': max_sol,
+        'is_active': True
     })
     save_wallets(wallets)
     return True, f"Đã thêm ví mới: '{name}'"
@@ -96,6 +139,31 @@ def remove_wallet(address):
     
     save_wallets(new_wallets)
     return True, "Đã xóa ví khỏi danh sách theo dõi."
+
+def delete_wallet_by_index(index):
+    wallets = load_wallets()
+    if 0 <= index < len(wallets):
+        del wallets[index]
+        save_wallets(wallets)
+        return True
+    return False
+
+def toggle_wallet_state(index):
+    wallets = load_wallets()
+    if 0 <= index < len(wallets):
+        wallets[index]['is_active'] = not wallets[index].get('is_active', True)
+        save_wallets(wallets)
+        return True, wallets[index]['is_active']
+    return False, False
+
+def update_wallet_limits(index, min_sol, max_sol):
+    wallets = load_wallets()
+    if 0 <= index < len(wallets):
+        wallets[index]['min_sol'] = min_sol
+        wallets[index]['max_sol'] = max_sol
+        save_wallets(wallets)
+        return True
+    return False
 
 # --- Alarm State (Single User / Global) ---
 

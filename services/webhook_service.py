@@ -38,6 +38,9 @@ def process_helius_webhook(payload):
             # Match against flat wallet list
             matched_this_transfer = False
             for wallet in wallets:
+                if not wallet.get('is_active', True):
+                    continue
+                
                 is_out = (from_user == wallet['address'])
                 is_in = (to_user == wallet['address'])
                 

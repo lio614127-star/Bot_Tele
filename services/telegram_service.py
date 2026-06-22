@@ -2,10 +2,12 @@ import os
 import requests
 import json
 import time
+import re
 from datetime import datetime
 from utils.logger import setup_logger
 from utils.persistence import (
-    set_alarm_state, get_alarm_state, load_wallets, add_wallet, remove_wallet
+    set_alarm_state, get_alarm_state, load_wallets, add_wallet, remove_wallet,
+    get_user_state, set_user_state, toggle_wallet_state, update_wallet_limits, delete_wallet_by_index
 )
 from services.helius_service import sync_wallets_to_helius
 
@@ -44,23 +46,33 @@ def send_message(text, reply_markup=None):
         logger.error(f"Failed to send Telegram message: {e}")
         return False
 
+def edit_message(message_id, text, reply_markup=None):
+    """Edits an existing message."""
+    bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+    chat_id = os.getenv('TELEGRAM_CHAT_ID')
+    url = f"{TELEGRAM_API_URL}{bot_token}/editMessageText"
+    payload = {
+        "chat_id": chat_id,
+        "message_id": message_id,
+        "text": text,
+        "parse_mode": "HTML",
+        "disable_web_page_preview": True
+    }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
+    requests.post(url, json=payload, timeout=10)
+
 def send_startup_message():
-    """
-    Sends a startup notification.
-    """
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
     text = (
         f"🚀 <b>Bot Alarm Online</b>\n"
         f"Time: <code>{now}</code>\n"
         f"Mode: Single-User\n\n"
-        f"Dùng /list để xem danh sách ví."
+        f"Dùng /wallets để xem danh sách ví."
     )
     return send_message(text)
 
 def send_alarm_message(amount, wallet_addr, signature, wallet_name="N/A", direction="OUT (Gửi đi)"):
-    """
-    Sends an interactive alarm message with wallet name and direction.
-    """
     solscan_url = f"https://solscan.io/tx/{signature}"
     text = (
         f"🚨 <b>BÁO ĐỘNG! PHÁT HIỆN GIAO DỊCH</b>\n\n"
@@ -76,46 +88,137 @@ def send_alarm_message(amount, wallet_addr, signature, wallet_name="N/A", direct
             {"text": "🛑 Dừng báo động", "callback_data": "stop_alarm"}
         ]]
     }
-    
     return send_message(text, reply_markup=reply_markup)
 
 def is_valid_solana_address(address):
-    """
-    Simple validation for Solana address format.
-    """
     if not 32 <= len(address) <= 44:
         return False
     base58_chars = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz"
     return all(c in base58_chars for c in address)
 
-def handle_webhook(payload):
-    """
-    Handles incoming updates from Telegram.
-    """
-    admin_id = os.getenv('TELEGRAM_CHAT_ID')
+def render_wallets_list():
+    wallets = load_wallets()
+    msg = f"<b>Tổng số ví đang theo dõi: {len(wallets)} / 100000</b>\n"
+    msg += "✅ - Ví đang hoạt động\n"
+    msg += "⏸️ - Bạn đã tạm dừng ví này\n\n"
     
+    if not wallets:
+        msg += "<i>Danh sách ví trống. Dùng /add để thêm.</i>"
+    else:
+        for i, w in enumerate(wallets):
+            icon = "✅" if w.get('is_active', True) else "⏸️"
+            name = w.get('name', 'N/A')
+            msg += f"{icon} /w_{i}\n<code>{w['address']}</code> ({name})\n"
+    return msg
+
+def render_wallet_detail(index):
+    wallets = load_wallets()
+    if index < 0 or index >= len(wallets):
+        return "❌ Không tìm thấy ví này.", None
+        
+    w = wallets[index]
+    is_active = w.get('is_active', True)
+    
+    msg = f"💼 <b>Tên ví:</b> {w.get('name', 'N/A')}\n"
+    msg += f"📍 <b>Địa chỉ:</b> <code>{w['address']}</code>\n"
+    msg += f"📊 <b>Giới hạn:</b> {w['min_sol']} - {w['max_sol']} SOL\n"
+    msg += f"🟢 <b>Trạng thái:</b> {'Đang theo dõi (✅)' if is_active else 'Tạm dừng (⏸️)'}"
+    
+    toggle_text = "⏸️ Tạm dừng" if is_active else "▶️ Tiếp tục"
+    reply_markup = {
+        "inline_keyboard": [
+            [{"text": "✏️ Sửa giới hạn Min-Max", "callback_data": f"edit_limit_{index}"}],
+            [{"text": toggle_text, "callback_data": f"toggle_{index}"}, {"text": "🗑️ Xóa ví", "callback_data": f"delete_{index}"}],
+            [{"text": "⬅️ Quay lại danh sách", "callback_data": "back_to_wallets"}]
+        ]
+    }
+    return msg, reply_markup
+
+def handle_webhook(payload):
+    admin_id = os.getenv('TELEGRAM_CHAT_ID')
     message = payload.get('message')
     callback_query = payload.get('callback_query')
     
     if message:
         chat_id = str(message.get('chat', {}).get('id'))
-        if chat_id != admin_id:
-            logger.warning(f"Ignored unauthorized chat: {chat_id}")
-            return
+        if chat_id != admin_id: return
             
         text = message.get('text', '')
+        user_state = get_user_state(chat_id)
         
+        # Handle active conversation state first
+        if user_state and not text.startswith('/'):
+            if user_state == 'WAITING_ADD':
+                lines = text.strip().split('\n')
+                results = []
+                has_success = False
+                for line in lines:
+                    parts = line.split()
+                    if len(parts) < 3:
+                        results.append(f"❌ <code>{line[:15]}...</code>: Thiếu tham số.")
+                        continue
+                    
+                    address = parts[0]
+                    try:
+                        min_sol, max_sol = float(parts[1]), float(parts[2])
+                        name = " ".join(parts[3:]) if len(parts) > 3 else None
+                        if not is_valid_solana_address(address):
+                            results.append(f"❌ <code>{address[:8]}...</code>: Địa chỉ sai.")
+                            continue
+                        success, note = add_wallet(address, min_sol, max_sol, name)
+                        if success: has_success = True
+                        results.append(f"✅ {note}")
+                    except ValueError:
+                        results.append(f"❌ <code>{line[:15]}...</code>: Lỗi số min/max.")
+                
+                if results:
+                    if has_success:
+                        sync_success, sync_note = sync_wallets_to_helius()
+                        results.append(f"\n🔄 <b>Helius Sync:</b>\n{sync_note}")
+                    send_message("📝 **Kết quả cập nhật:**\n" + "\n".join(results))
+                set_user_state(chat_id, None)
+                return
+                
+            elif user_state == 'WAITING_REMOVE':
+                address = text.strip()
+                success, note = remove_wallet(address)
+                if success:
+                    sync_success, sync_note = sync_wallets_to_helius()
+                    note += f"\n\n🔄 <b>Helius Sync:</b>\n{sync_note}"
+                send_message(f"{'🗑️' if success else '❌'} {note}")
+                set_user_state(chat_id, None)
+                return
+                
+            elif user_state.startswith('EDIT_LIMIT_'):
+                index = int(user_state.split('_')[2])
+                parts = text.strip().split()
+                if len(parts) != 2:
+                    send_message("❌ Vui lòng gửi đúng 2 số (Ví dụ: <code>1.5 3.0</code>)")
+                    return
+                try:
+                    min_sol, max_sol = float(parts[0]), float(parts[1])
+                    if update_wallet_limits(index, min_sol, max_sol):
+                        send_message(f"✅ Đã cập nhật giới hạn: {min_sol} - {max_sol} SOL.")
+                        msg, reply_markup = render_wallet_detail(index)
+                        send_message(msg, reply_markup)
+                    else:
+                        send_message("❌ Lỗi: Không tìm thấy ví.")
+                except ValueError:
+                    send_message("❌ Lỗi định dạng số.")
+                set_user_state(chat_id, None)
+                return
+
+        # Handle commands
         if text.startswith('/start'):
             send_message(
                 f"👋 Chào Sếp! Bot đã sẵn sàng.\n\n"
                 f"<b>Lệnh điều khiển:</b>\n"
-                f"📋 /list - Danh sách ví\n"
-                f"➕ /add - Thêm ví (addr min max [tên])\n"
-                f"🗑️ /remove - Xóa ví\n"
-                f"📊 /status - Trạng thái\n"
+                f"📋 /wallets - Quản lý danh sách ví\n"
+                f"➕ /add - Thêm ví mới\n"
+                f"🗑️ /remove - Xóa ví bằng địa chỉ\n"
+                f"📊 /status - Trạng thái báo động\n"
                 f"🛑 /stop - Dừng báo động"
             )
-            
         elif text == '/stop':
             set_alarm_state(False)
             send_message("🛑 <b>Đã dừng báo động.</b>")
@@ -132,85 +235,83 @@ def handle_webhook(payload):
             if is_active and state.get('current_tx'):
                 tx = state.get('current_tx')
                 msg += f"\n\n🔥 <b>Ví kích hoạt:</b>\n<b>{tx.get('wallet_name', 'N/A')}</b>\n<code>{tx.get('wallet_addr', 'N/A')}</code>"
-            
             send_message(msg)
             
-        elif text == '/list':
-            wallets = load_wallets()
-            if not wallets:
-                send_message("📋 Danh sách ví trống.")
-                return
+        elif text == '/list' or text == '/wallets':
+            send_message(render_wallets_list())
+            
+        elif text.startswith('/w_'):
+            match = re.match(r'/w_(\d+)', text)
+            if match:
+                index = int(match.group(1))
+                msg, reply_markup = render_wallet_detail(index)
+                send_message(msg, reply_markup)
                 
-            msg = "📋 <b>Danh sách ví theo dõi:</b>\n\n"
-            for i, w in enumerate(wallets, 1):
-                msg += f"{i}. <b>{w.get('name', 'N/A')}</b>\n   <code>{w['address']}</code>\n   ({w['min_sol']} - {w['max_sol']} SOL)\n\n"
-            send_message(msg)
-            
         elif text.startswith('/add'):
-            lines = text.strip().split('\n')
-            results = []
+            set_user_state(chat_id, 'WAITING_ADD')
+            reply_markup = {"inline_keyboard": [[{"text": "❌ Hủy", "callback_data": "cancel_action"}]]}
+            send_message(
+                "📝 <b>Thêm ví mới</b>\n"
+                "Vui lòng gửi danh sách ví. Gửi mỗi ví trên 1 dòng theo cấu trúc:\n\n"
+                "<code>Địa_Chỉ_Ví Min_SOL Max_SOL Tên_Ví</code>\n\n"
+                "Ví dụ:\n<code>6TTQDxeg... 1.5 3.0 Ví_Dev_2</code>",
+                reply_markup=reply_markup
+            )
             
-            has_success = False
-            for line in lines:
-                parts = line.split()
-                if parts[0] == '/add': parts = parts[1:]
-                if len(parts) < 3:
-                    if len(lines) == 1: 
-                        send_message(
-                            "📝 <b>Hướng dẫn thêm ví:</b>\n"
-                            "Bạn hãy chạm vào dòng lệnh mẫu dưới đây để copy, sau đó dán ra và sửa lại thông tin của bạn nhé:\n\n"
-                            "<code>/add Địa_Chỉ_Ví_Solana 1 100 Tên_Ví</code>"
-                        )
-                    continue 
-                
-                address = parts[0]
-                try:
-                    min_sol, max_sol = float(parts[1]), float(parts[2])
-                    name = " ".join(parts[3:]) if len(parts) > 3 else None
-                    
-                    if not is_valid_solana_address(address):
-                        results.append(f"❌ <code>{address[:8]}</code>: Địa chỉ sai.")
-                        continue
-
-                    success, note = add_wallet(address, min_sol, max_sol, name)
-                    if success: has_success = True
-                    results.append(f"✅ {note}")
-                except ValueError:
-                    results.append(f"❌ <code>{line[:15]}</code>: Lỗi số.")
-            
-            if results:
-                if has_success:
-                    sync_success, sync_note = sync_wallets_to_helius()
-                    results.append(f"\n🔄 <b>Helius Sync:</b>\n{sync_note}")
-                
-                send_message("📝 **Kết quả cập nhật:**\n" + "\n".join(results))
-                
         elif text.startswith('/remove'):
-            parts = text.split()
-            if len(parts) < 2:
-                send_message(
-                    "📝 <b>Hướng dẫn xóa ví:</b>\n"
-                    "Bạn hãy chạm vào dòng lệnh mẫu dưới đây để copy, sau đó dán ra và thay bằng địa chỉ ví cần xóa nhé:\n\n"
-                    "<code>/remove Địa_Chỉ_Ví_Solana</code>"
-                )
-                return
-            
-            address = parts[1]
-            success, note = remove_wallet(address)
-            
-            if success:
-                sync_success, sync_note = sync_wallets_to_helius()
-                note += f"\n\n🔄 <b>Helius Sync:</b>\n{sync_note}"
-                
-            send_message(f"{'🗑️' if success else '❌'} {note}")
+            set_user_state(chat_id, 'WAITING_REMOVE')
+            reply_markup = {"inline_keyboard": [[{"text": "❌ Hủy", "callback_data": "cancel_action"}]]}
+            send_message("📝 <b>Xóa ví</b>\nVui lòng gửi địa chỉ ví cần xóa:", reply_markup=reply_markup)
 
     elif callback_query:
         chat_id = str(callback_query.get('from', {}).get('id'))
         if chat_id != admin_id: return
-            
-        if callback_query.get('data') == 'stop_alarm':
-            set_alarm_state(False)
-            callback_id = callback_query.get('id')
+        
+        data = callback_query.get('data')
+        message_id = callback_query.get('message', {}).get('message_id')
+        callback_id = callback_query.get('id')
+        
+        def answer(txt=""):
             url = f"{TELEGRAM_API_URL}{os.getenv('TELEGRAM_BOT_TOKEN')}/answerCallbackQuery"
-            requests.post(url, json={"callback_query_id": callback_id, "text": "Đã dừng!"})
+            requests.post(url, json={"callback_query_id": callback_id, "text": txt})
+            
+        if data == 'stop_alarm':
+            set_alarm_state(False)
+            answer("Đã dừng!")
             send_message("🛑 **Báo động đã dừng.**")
+            
+        elif data == 'cancel_action':
+            set_user_state(chat_id, None)
+            edit_message(message_id, "❌ <i>Đã hủy thao tác.</i>")
+            answer()
+            
+        elif data == 'back_to_wallets':
+            set_user_state(chat_id, None)
+            edit_message(message_id, render_wallets_list())
+            answer()
+            
+        elif data.startswith('delete_'):
+            index = int(data.split('_')[1])
+            if delete_wallet_by_index(index):
+                sync_wallets_to_helius()
+                edit_message(message_id, "🗑️ <i>Đã xóa ví thành công!</i>")
+                # Gửi lại list
+                send_message(render_wallets_list())
+            else:
+                edit_message(message_id, "❌ Lỗi: Không tìm thấy ví.")
+            answer()
+            
+        elif data.startswith('toggle_'):
+            index = int(data.split('_')[1])
+            success, is_active = toggle_wallet_state(index)
+            if success:
+                msg, reply_markup = render_wallet_detail(index)
+                edit_message(message_id, msg, reply_markup)
+            answer()
+            
+        elif data.startswith('edit_limit_'):
+            index = int(data.split('_')[2])
+            set_user_state(chat_id, f'EDIT_LIMIT_{index}')
+            reply_markup = {"inline_keyboard": [[{"text": "⬅️ Hủy", "callback_data": "cancel_action"}]]}
+            send_message("✏️ Vui lòng nhập giới hạn SOL mới (Min Max). Ví dụ: <code>2.0 5.0</code>", reply_markup=reply_markup)
+            answer()
