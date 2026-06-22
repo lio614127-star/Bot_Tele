@@ -15,17 +15,25 @@ load_dotenv()
 app = Flask(__name__)
 logger = setup_logger()
 
-# Fail-fast check for critical variables
-CRITICAL_VARS = [
-    'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'SECRET_TOKEN', 
-    'TELEGRAM_SECRET', 'ALARM_INTERVAL', 'MAX_ALARM_DURATION'
+# Fallback for ALARM settings if missing
+ALARM_INTERVAL = int(os.getenv('ALARM_INTERVAL', 2))
+MAX_ALARM_DURATION = int(os.getenv('MAX_ALARM_DURATION', 1200))
+
+# Strictly mandatory for bot communication and security
+MANDATORY_VARS = [
+    'TELEGRAM_BOT_TOKEN', 'TELEGRAM_CHAT_ID', 'SECRET_TOKEN', 'TELEGRAM_SECRET'
 ]
-missing_vars = [v for v in CRITICAL_VARS if not os.getenv(v)]
+missing_vars = [v for v in MANDATORY_VARS if not os.getenv(v)]
 if missing_vars and not os.getenv('PYTEST_CURRENT_TEST'):
     logger.critical(f"UNABLE TO START: Missing mandatory environment variables: {', '.join(missing_vars)}")
     exit(1)
 
 SECRET_TOKEN = os.getenv('SECRET_TOKEN')
+
+@app.before_request
+def log_request_info():
+    if request.path.startswith('/webhook'):
+        logger.debug(f"Incoming request: {request.method} {request.path} from {request.remote_addr}")
 
 @app.route('/')
 def health_check():

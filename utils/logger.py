@@ -10,8 +10,11 @@ def setup_logger():
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
 
+    debug_mode = os.getenv('DEBUG_MODE', 'False').lower() == 'true'
+    level = logging.DEBUG if debug_mode else logging.INFO
+
     logging.basicConfig(
-        level=logging.INFO,
+        level=level,
         format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
         handlers=[
             logging.FileHandler(LOG_FILE, encoding='utf-8'),

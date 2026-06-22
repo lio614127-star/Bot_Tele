@@ -1,6 +1,7 @@
 import threading
 import time
 import os
+import requests
 from utils.persistence import get_alarm_state, set_alarm_state
 from services.telegram_service import send_message
 from utils.logger import setup_logger
@@ -36,9 +37,28 @@ def alarm_worker_loop():
                 tx = state.get('current_tx', {})
                 name = tx.get('wallet_name', 'N/A')
                 addr = tx.get('wallet_addr', 'N/A')
+                direction = tx.get('direction', 'OUT')
+                amount = tx.get('amount', 0) / 1_000_000_000.0
                 
                 logger.info(f"ALARM ACTIVE: {name} ({addr})")
-                send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>")
+                
+                ntfy_topic = os.getenv('NTFY_TOPIC')
+                if ntfy_topic:
+                    try:
+                        requests.post(f"https://ntfy.sh/{ntfy_topic}",
+                            data=f"Ví {name} vừa có giao dịch {direction} số lượng {amount:.4f} SOL. Mở Telegram để xem chi tiết và tắt báo động!",
+                            headers={
+                                "Title": "BÁO ĐỘNG GIAO DỊCH!",
+                                "Priority": "5",
+                                "Tags": "rotating_light,warning"
+                            },
+                            timeout=5
+                        )
+                    except Exception as e:
+                        logger.error(f"Lỗi khi gửi ntfy: {e}")
+                else:
+                    # Fallback if no ntfy topic is set
+                    send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>")
         
         time.sleep(interval)
 

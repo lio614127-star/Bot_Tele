@@ -56,16 +56,16 @@ def send_startup_message():
     )
     return send_message(text)
 
-def send_alarm_message(amount, wallet_addr, signature, wallet_name="N/A"):
+def send_alarm_message(amount, wallet_addr, signature, wallet_name="N/A", direction="OUT (Gửi đi)"):
     """
-    Sends an interactive alarm message with wallet name.
+    Sends an interactive alarm message with wallet name and direction.
     """
     solscan_url = f"https://solscan.io/tx/{signature}"
     text = (
         f"🚨 <b>BÁO ĐỘNG! PHÁT HIỆN GIAO DỊCH</b>\n\n"
         f"🏷️ <b>Tên ví:</b> <b>{wallet_name}</b>\n"
         f"💰 <b>Số lượng:</b> {amount:.4f} SOL\n"
-        f"📤 <b>Hướng:</b> OUT (Gửi đi)\n"
+        f"🧭 <b>Hướng:</b> {direction}\n"
         f"👛 <b>Địa chỉ:</b> <code>{wallet_addr}</code>\n\n"
         f"🔗 <a href='{solscan_url}'>Xem trên Solscan</a>"
     )
