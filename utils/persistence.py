@@ -116,7 +116,7 @@ def add_wallet(address, min_sol=0.0, max_sol=1000000.0, name=None):
             wallet['name'] = name
             wallet['is_active'] = True # Reactivate if it was paused
             save_wallets(wallets)
-            return True, f"Đã cập nhật ví '{name}'."
+            return True, f"Đã cập nhật ví: <code>{address}</code> - {name} - {min_sol} đến {max_sol} SOL."
     
     # Add new wallet
     wallets.append({
@@ -127,7 +127,7 @@ def add_wallet(address, min_sol=0.0, max_sol=1000000.0, name=None):
         'is_active': True
     })
     save_wallets(wallets)
-    return True, f"Đã thêm ví mới: '{name}'"
+    return True, f"Đã thêm ví mới: <code>{address}</code> - {name} - {min_sol} đến {max_sol} SOL."
 
 def remove_wallet(address):
     """Remove a wallet from the flat list."""
