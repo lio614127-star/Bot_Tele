@@ -43,5 +43,6 @@ def sync_wallets_to_helius():
         logger.info(f"Successfully synced {len(addresses)} wallets to Helius.")
         return True, f"Đã đồng bộ thành công {len(addresses)} ví lên Helius!"
     except requests.exceptions.RequestException as e:
-        logger.error(f"Failed to sync with Helius API: {e}")
-        return False, f"Lỗi khi đồng bộ lên Helius: {e}"
+        error_details = e.response.text if hasattr(e, 'response') and e.response else str(e)
+        logger.error(f"Failed to sync with Helius API: {error_details}")
+        return False, f"Lỗi từ Helius: {error_details}"
