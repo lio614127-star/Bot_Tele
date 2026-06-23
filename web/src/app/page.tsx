@@ -81,7 +81,7 @@ export default function App() {
     await fetch('/api/wallets', { method: 'POST', body: JSON.stringify(updated) })
     mutateWallets()
     setShowAddModal(false)
-    setNewWallet({ address: '', name: '', min_sol: 0.1, max_sol: 100 })
+    setNewWallet({ address: '', name: '', min_sol: 0, max_sol: 0, is_active: true })
   }
 
   const handleRemoveWallet = async (addr: string) => {
