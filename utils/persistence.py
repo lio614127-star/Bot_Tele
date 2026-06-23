@@ -83,11 +83,17 @@ def load_wallets():
                 save_wallets(merged_wallets)
                 return merged_wallets
                 
-            # Ensure is_active exists for all existing flat wallets
+            # Ensure is_active, alert_in, alert_out exists for all existing flat wallets
             updated = False
             for w in data:
                 if 'is_active' not in w:
                     w['is_active'] = True
+                    updated = True
+                if 'alert_in' not in w:
+                    w['alert_in'] = True
+                    updated = True
+                if 'alert_out' not in w:
+                    w['alert_out'] = True
                     updated = True
             if updated:
                 save_wallets(data)
@@ -109,9 +115,9 @@ def add_wallet(address, min_sol=0.0, max_sol=1000000.0, name=None):
         name = f"Ví_{address[:4]}"
     
     # Check if wallet already exists
-    for wallet in wallets:
+    for i, wallet in enumerate(wallets):
         if wallet['address'] == address:
-            return False, f"Ví <code>{address[:8]}...</code> đã tồn tại trong danh sách."
+            return False, f"Ví <code>{address[:8]}...</code> đã tồn tại trong danh sách.", i
     
     # Add new wallet
     wallets.append({
@@ -119,10 +125,13 @@ def add_wallet(address, min_sol=0.0, max_sol=1000000.0, name=None):
         'name': name,
         'min_sol': min_sol,
         'max_sol': max_sol,
-        'is_active': True
+        'is_active': True,
+        'alert_in': True,
+        'alert_out': True
     })
     save_wallets(wallets)
-    return True, f"Đã thêm ví mới: <code>{address}</code> - {name} - {min_sol} đến {max_sol} SOL."
+    new_index = len(wallets) - 1
+    return True, f"Đã thêm ví mới: <code>{address}</code> - {name} - {min_sol} đến {max_sol} SOL.", new_index
 
 def remove_wallet(address):
     """Remove a wallet from the flat list."""
@@ -151,10 +160,33 @@ def toggle_wallet_state(index):
         return True, wallets[index]['is_active']
     return False, False
 
-def update_wallet_limits(index, min_sol, max_sol):
+def toggle_alert_in(index):
+    wallets = load_wallets()
+    if 0 <= index < len(wallets):
+        wallets[index]['alert_in'] = not wallets[index].get('alert_in', True)
+        save_wallets(wallets)
+        return True, wallets[index]['alert_in']
+    return False, False
+
+def toggle_alert_out(index):
+    wallets = load_wallets()
+    if 0 <= index < len(wallets):
+        wallets[index]['alert_out'] = not wallets[index].get('alert_out', True)
+        save_wallets(wallets)
+        return True, wallets[index]['alert_out']
+    return False, False
+
+def update_wallet_min(index, min_sol):
     wallets = load_wallets()
     if 0 <= index < len(wallets):
         wallets[index]['min_sol'] = min_sol
+        save_wallets(wallets)
+        return True
+    return False
+
+def update_wallet_max(index, max_sol):
+    wallets = load_wallets()
+    if 0 <= index < len(wallets):
         wallets[index]['max_sol'] = max_sol
         save_wallets(wallets)
         return True

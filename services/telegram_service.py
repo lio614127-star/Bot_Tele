@@ -7,7 +7,8 @@ from datetime import datetime
 from utils.logger import setup_logger
 from utils.persistence import (
     set_alarm_state, get_alarm_state, load_wallets, add_wallet, remove_wallet,
-    get_user_state, set_user_state, toggle_wallet_state, update_wallet_limits, delete_wallet_by_index
+    get_user_state, set_user_state, toggle_wallet_state, delete_wallet_by_index,
+    update_wallet_min, update_wallet_max, toggle_alert_in, toggle_alert_out
 )
 from services.helius_service import sync_wallets_to_helius
 
@@ -121,6 +122,8 @@ def render_wallet_detail(index):
         
     w = wallets[index]
     is_active = w.get('is_active', True)
+    alert_in = w.get('alert_in', True)
+    alert_out = w.get('alert_out', True)
     
     msg = f"💼 <b>Tên ví:</b> {w.get('name', 'N/A')}\n"
     msg += f"📍 <b>Địa chỉ:</b> <code>{w['address']}</code>\n"
@@ -128,10 +131,17 @@ def render_wallet_detail(index):
     msg += f"🟢 <b>Trạng thái:</b> {'Đang theo dõi (✅)' if is_active else 'Tạm dừng (⏸️)'}"
     
     toggle_text = "⏸️ Tạm dừng" if is_active else "▶️ Tiếp tục"
+    in_text = "✅ Nhận (IN)" if alert_in else "❌ Nhận (IN)"
+    out_text = "✅ Gửi (OUT)" if alert_out else "❌ Gửi (OUT)"
+    
     reply_markup = {
         "inline_keyboard": [
-            [{"text": "✏️ Sửa giới hạn Min-Max", "callback_data": f"edit_limit_{index}"}],
-            [{"text": toggle_text, "callback_data": f"toggle_{index}"}, {"text": "🗑️ Xóa ví", "callback_data": f"delete_{index}"}],
+            [{"text": f"📝 Min: {w['min_sol']}", "callback_data": f"edit_min_{index}"}, 
+             {"text": f"📝 Max: {w['max_sol']}", "callback_data": f"edit_max_{index}"}],
+            [{"text": in_text, "callback_data": f"toggle_in_{index}"}, 
+             {"text": out_text, "callback_data": f"toggle_out_{index}"}],
+            [{"text": toggle_text, "callback_data": f"toggle_{index}"}, 
+             {"text": "🗑️ Xóa ví", "callback_data": f"delete_{index}"}],
             [{"text": "⬅️ Quay lại danh sách", "callback_data": "back_to_wallets"}]
         ]
     }
@@ -155,6 +165,7 @@ def handle_webhook(payload):
                 lines = text.strip().split('\n')
                 results = []
                 has_success = False
+                added_indices = []
                 for line in lines:
                     parts = line.split()
                     if len(parts) < 3:
@@ -168,10 +179,11 @@ def handle_webhook(payload):
                         if not is_valid_solana_address(address):
                             results.append(f"❌ <code>{address[:8]}...</code>: Địa chỉ sai.")
                             continue
-                        success, note = add_wallet(address, min_sol, max_sol, name)
+                        success, note, new_idx = add_wallet(address, min_sol, max_sol, name)
                         if success:
                             has_success = True
                             results.append(f"✅ {note}")
+                            added_indices.append(new_idx)
                         else:
                             results.append(f"❌ {note}")
                     except ValueError:
@@ -181,7 +193,19 @@ def handle_webhook(payload):
                     if has_success:
                         sync_success, sync_note = sync_wallets_to_helius()
                         results.append(f"\n🔄 <b>Helius Sync:</b>\n{sync_note}")
-                    send_message("📝 **Kết quả cập nhật:**\n" + "\n".join(results))
+                        
+                    reply_markup = None
+                    if added_indices:
+                        wallets = load_wallets()
+                        keyboard = []
+                        for idx in added_indices:
+                            if idx < len(wallets):
+                                w = wallets[idx]
+                                keyboard.append([{"text": f"⚙️ Quản lý: {w.get('name', 'Ví mới')}", "callback_data": f"manage_{idx}"}])
+                        if keyboard:
+                            reply_markup = {"inline_keyboard": keyboard}
+                            
+                    send_message("📝 **Kết quả cập nhật:**\n" + "\n".join(results), reply_markup=reply_markup)
                 set_user_state(chat_id, None)
                 return
                 
@@ -195,16 +219,27 @@ def handle_webhook(payload):
                 set_user_state(chat_id, None)
                 return
                 
-            elif user_state.startswith('EDIT_LIMIT_'):
+            elif user_state.startswith('EDIT_MIN_'):
                 index = int(user_state.split('_')[2])
-                parts = text.strip().split()
-                if len(parts) != 2:
-                    send_message("❌ Vui lòng gửi đúng 2 số (Ví dụ: <code>1.5 3.0</code>)")
-                    return
                 try:
-                    min_sol, max_sol = float(parts[0]), float(parts[1])
-                    if update_wallet_limits(index, min_sol, max_sol):
-                        send_message(f"✅ Đã cập nhật giới hạn: {min_sol} - {max_sol} SOL.")
+                    min_sol = float(text.strip())
+                    if update_wallet_min(index, min_sol):
+                        send_message(f"✅ Đã cập nhật Min SOL thành: {min_sol}.")
+                        msg, reply_markup = render_wallet_detail(index)
+                        send_message(msg, reply_markup)
+                    else:
+                        send_message("❌ Lỗi: Không tìm thấy ví.")
+                except ValueError:
+                    send_message("❌ Lỗi định dạng số.")
+                set_user_state(chat_id, None)
+                return
+                
+            elif user_state.startswith('EDIT_MAX_'):
+                index = int(user_state.split('_')[2])
+                try:
+                    max_sol = float(text.strip())
+                    if update_wallet_max(index, max_sol):
+                        send_message(f"✅ Đã cập nhật Max SOL thành: {max_sol}.")
                         msg, reply_markup = render_wallet_detail(index)
                         send_message(msg, reply_markup)
                     else:
@@ -343,9 +378,38 @@ def handle_webhook(payload):
                 edit_message(message_id, msg, reply_markup)
             answer()
             
-        elif data.startswith('edit_limit_'):
+        elif data.startswith('manage_'):
+            index = int(data.split('_')[1])
+            msg, reply_markup = render_wallet_detail(index)
+            send_message(msg, reply_markup)
+            answer()
+            
+        elif data.startswith('edit_min_'):
             index = int(data.split('_')[2])
-            set_user_state(chat_id, f'EDIT_LIMIT_{index}')
+            set_user_state(chat_id, f'EDIT_MIN_{index}')
             reply_markup = {"inline_keyboard": [[{"text": "⬅️ Hủy", "callback_data": "cancel_action"}]]}
-            send_message("✏️ Vui lòng nhập giới hạn SOL mới (Min Max). Ví dụ: <code>2.0 5.0</code>", reply_markup=reply_markup)
+            send_message("✏️ Vui lòng nhập số Min SOL mới. Ví dụ: <code>0.5</code>", reply_markup=reply_markup)
+            answer()
+            
+        elif data.startswith('edit_max_'):
+            index = int(data.split('_')[2])
+            set_user_state(chat_id, f'EDIT_MAX_{index}')
+            reply_markup = {"inline_keyboard": [[{"text": "⬅️ Hủy", "callback_data": "cancel_action"}]]}
+            send_message("✏️ Vui lòng nhập số Max SOL mới. Ví dụ: <code>10.0</code>", reply_markup=reply_markup)
+            answer()
+            
+        elif data.startswith('toggle_in_'):
+            index = int(data.split('_')[2])
+            success, is_alert_in = toggle_alert_in(index)
+            if success:
+                msg, reply_markup = render_wallet_detail(index)
+                edit_message(message_id, msg, reply_markup)
+            answer()
+            
+        elif data.startswith('toggle_out_'):
+            index = int(data.split('_')[2])
+            success, is_alert_out = toggle_alert_out(index)
+            if success:
+                msg, reply_markup = render_wallet_detail(index)
+                edit_message(message_id, msg, reply_markup)
             answer()

@@ -44,7 +44,13 @@ def process_helius_webhook(payload):
                 is_out = (from_user == wallet['address'])
                 is_in = (to_user == wallet['address'])
                 
-                if is_out or is_in:
+                alert_out = wallet.get('alert_out', True)
+                alert_in = wallet.get('alert_in', True)
+                
+                # Check toggles before alerting
+                should_alert = (is_out and alert_out) or (is_in and alert_in)
+                
+                if should_alert:
                     if wallet['min_sol'] <= amount_sol <= wallet['max_sol']:
                         direction = "OUT (Gửi đi)" if is_out else "IN (Nhận về)"
                         logger.info(f"MATCH: {amount_sol} SOL {direction} - {wallet['name']} ({wallet['address']})")
