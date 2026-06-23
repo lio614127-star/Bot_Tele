@@ -41,6 +41,9 @@ def send_message(text, reply_markup=None):
     try:
         response = requests.post(url, json=payload, timeout=10)
         response.raise_for_status()
+        data = response.json()
+        if data.get('ok'):
+            return data.get('result', {}).get('message_id', True)
         return True
     except Exception as e:
         logger.error(f"Failed to send Telegram message: {e}")
@@ -279,9 +282,31 @@ def handle_webhook(payload):
             requests.post(url, json={"callback_query_id": callback_id, "text": txt})
             
         if data == 'stop_alarm':
+            state = get_alarm_state()
+            spam_ids = state.get('spam_message_ids', [])
+            tx = state.get('current_tx', {})
+            first_msg_id = tx.get('first_message_id')
+            
             set_alarm_state(False)
-            answer("Đã dừng!")
-            send_message("🛑 **Báo động đã dừng.**")
+            
+            bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
+            # Delete spam messages
+            for spam_id in spam_ids:
+                try:
+                    del_url = f"{TELEGRAM_API_URL}{bot_token}/deleteMessage"
+                    requests.post(del_url, json={"chat_id": chat_id, "message_id": spam_id}, timeout=5)
+                except Exception as e:
+                    logger.error(f"Failed to delete spam message: {e}")
+            
+            # Remove inline keyboard from the first message
+            if first_msg_id:
+                try:
+                    edit_url = f"{TELEGRAM_API_URL}{bot_token}/editMessageReplyMarkup"
+                    requests.post(edit_url, json={"chat_id": chat_id, "message_id": first_msg_id}, timeout=5)
+                except:
+                    pass
+                    
+            answer("Đã dừng và dọn dẹp tin nhắn!")
             
         elif data == 'cancel_action':
             set_user_state(chat_id, None)

@@ -191,11 +191,24 @@ def get_alarm_state():
 
 def set_alarm_state(is_active, current_tx=None):
     """Set global alarm state."""
-    state = {
-        'is_active': is_active,
-        'current_tx': current_tx,
-        'updated_at': time.time()
-    }
+    state = get_alarm_state()
+    state['is_active'] = is_active
+    state['updated_at'] = time.time()
+    
+    if is_active and current_tx is not None:
+        state['current_tx'] = current_tx
+        state['spam_message_ids'] = []
+        
+    with open(ALARM_STATE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(state, f, indent=4)
+
+def add_spam_message_id(msg_id):
+    """Add a spam message ID to the list to be deleted later."""
+    state = get_alarm_state()
+    spam_ids = state.get('spam_message_ids', [])
+    if msg_id not in spam_ids:
+        spam_ids.append(msg_id)
+    state['spam_message_ids'] = spam_ids
     with open(ALARM_STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=4)
 

@@ -58,10 +58,26 @@ def alarm_worker_loop():
                     except Exception as e:
                         logger.error(f"Lỗi khi gửi ntfy: {e}")
                         # Fallback to Telegram if ntfy fails
-                        send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>\n<i>(Lỗi ntfy: không gửi được push)</i>")
+                        reply_markup = {
+                            "inline_keyboard": [[
+                                {"text": "🛑 Dừng báo động", "callback_data": "stop_alarm"}
+                            ]]
+                        }
+                        msg_id = send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>\n<i>(Lỗi ntfy: không gửi được push)</i>", reply_markup=reply_markup)
+                        from utils.persistence import add_spam_message_id
+                        if isinstance(msg_id, int):
+                            add_spam_message_id(msg_id)
                 else:
                     # Fallback if no ntfy topic is set
-                    send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>")
+                    reply_markup = {
+                        "inline_keyboard": [[
+                            {"text": "🛑 Dừng báo động", "callback_data": "stop_alarm"}
+                        ]]
+                    }
+                    msg_id = send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>", reply_markup=reply_markup)
+                    from utils.persistence import add_spam_message_id
+                    if isinstance(msg_id, int):
+                        add_spam_message_id(msg_id)
         
         time.sleep(interval)
 

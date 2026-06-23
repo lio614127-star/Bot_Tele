@@ -49,18 +49,22 @@ def process_helius_webhook(payload):
                         direction = "OUT (Gửi đi)" if is_out else "IN (Nhận về)"
                         logger.info(f"MATCH: {amount_sol} SOL {direction} - {wallet['name']} ({wallet['address']})")
                         
-                        # Trigger global alarm
+                        msg_id = send_alarm_message(
+                            amount_sol,
+                            wallet['address'],
+                            signature,
+                            wallet_name=wallet['name'],
+                            direction=direction
+                        )
                         tx_data = {
                             'wallet_addr': wallet['address'],
                             'wallet_name': wallet['name'],
                             'amount': amount_lamports,
                             'signature': signature,
-                            'direction': direction
+                            'direction': direction,
+                            'first_message_id': msg_id if isinstance(msg_id, int) else None
                         }
                         set_alarm_state(True, tx_data)
-                        
-                        # Send alert
-                        send_alarm_message(amount_sol, wallet['address'], signature, wallet_name=wallet['name'], direction=direction)
                         
                         # Ensure alarm thread is running
                         start_alarm_thread()

@@ -16,7 +16,7 @@ app = Flask(__name__)
 logger = setup_logger()
 
 # Fallback for ALARM settings if missing
-ALARM_INTERVAL = int(os.getenv('ALARM_INTERVAL', 2))
+ALARM_INTERVAL = int(os.getenv('ALARM_INTERVAL', 1))
 MAX_ALARM_DURATION = int(os.getenv('MAX_ALARM_DURATION', 1200))
 
 # Strictly mandatory for bot communication and security
