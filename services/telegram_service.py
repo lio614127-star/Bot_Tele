@@ -370,7 +370,7 @@ def handle_webhook(payload):
                 edit_message(message_id, "❌ Lỗi: Không tìm thấy ví.")
             answer()
             
-        elif data.startswith('toggle_'):
+        elif data.startswith('toggle_') and not data.startswith('toggle_in_') and not data.startswith('toggle_out_'):
             index = int(data.split('_')[1])
             success, is_active = toggle_wallet_state(index)
             if success:
