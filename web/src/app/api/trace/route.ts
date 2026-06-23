@@ -18,7 +18,7 @@ export async function POST(req: Request) {
     const edgesMap = new Map()
 
     // Add root node
-    nodesMap.set(address, { id: address, data: { label: `[Root]\n${address.slice(0,4)}...${address.slice(-4)}` }, position: { x: 400, y: 300 }, style: { backgroundColor: '#06b6d4', color: '#000', fontWeight: 'bold' } })
+    nodesMap.set(address, { id: address, data: { label: `[Root]\n${address.slice(0,4)}...${address.slice(-4)}` }, position: { x: 400, y: 300 }, style: { backgroundColor: '#06b6d4', color: '#000', fontWeight: 'bold', padding: '10px', borderRadius: '8px' } })
 
     let xOff = 100
     let yOff = 100

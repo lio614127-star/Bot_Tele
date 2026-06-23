@@ -88,7 +88,7 @@ export default function App() {
       
       if (data.error) {
         setErrorMsg(data.error)
-        setNodes([{ id: 'err', position: { x: 250, y: 200 }, data: { label: `❌ Lỗi: ${data.error} (Thiếu Helius API Key?)` }, style: { backgroundColor: '#ef4444', color: '#fff' } } as any])
+        setNodes([{ id: 'err', position: { x: 250, y: 200 }, data: { label: `❌ Lỗi: ${data.error} (Thiếu Helius API Key?)` }, style: { backgroundColor: '#ef4444', color: '#fff', padding: '10px', borderRadius: '8px' } } as any])
         setEdges([])
         return
       }
@@ -101,8 +101,9 @@ export default function App() {
         }))
         setNodes(data.nodes)
         setEdges(formattedEdges)
+        setErrorMsg(`✅ Đã vẽ xong ${data.nodes.length} ví và ${data.edges.length} đường chuyển tiền! (Lăn chuột để Zoom)`)
       } else {
-        setNodes([{ id: 'empty', position: { x: 250, y: 200 }, data: { label: 'Không có biến động số dư nào (Transfer/Swap) gần đây!' }, style: { backgroundColor: '#f59e0b', color: '#fff' } } as any])
+        setNodes([{ id: 'empty', position: { x: 250, y: 200 }, data: { label: 'Không có biến động số dư nào (Transfer/Swap) gần đây!' }, style: { backgroundColor: '#f59e0b', color: '#fff', padding: '10px', borderRadius: '8px' } } as any])
         setEdges([])
       }
     } catch (e: any) {
@@ -326,8 +327,8 @@ export default function App() {
               </div>
 
               {errorMsg && (
-                <div className="bg-red-500/20 text-red-400 text-sm px-4 py-2 rounded-lg border border-red-500/50 w-full text-center">
-                  ⚠️ {errorMsg}
+                <div className={`text-sm px-4 py-2 rounded-lg border w-full text-center ${errorMsg.startsWith('✅') ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-red-500/20 text-red-400 border-red-500/50'}`}>
+                  {errorMsg}
                 </div>
               )}
               
@@ -350,6 +351,7 @@ export default function App() {
 
             <div className="flex-1 bg-black w-full h-[calc(100vh-64px)]">
               <ReactFlow 
+                key={nodes.length + edges.length} // Force remount to trigger fitView
                 nodes={nodes} 
                 edges={edges}
                 onNodesChange={onNodesChange}
