@@ -53,8 +53,8 @@ export default function App() {
   const [tokens, setTokens] = useState(['SOL', 'USDC', 'USDT', 'wSOL'])
   const [isLoading, setIsLoading] = useState(false)
   const [errorMsg, setErrorMsg] = useState('')
-  const [nodes, setNodes, onNodesChange] = useNodesState([{ id: '1', position: { x: 250, y: 200 }, data: { label: 'Chưa có dữ liệu quét' } }])
-  const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [nodes, setNodes, onNodesChange] = useNodesState<any>([{ id: '1', position: { x: 250, y: 200 }, data: { label: 'Chưa có dữ liệu quét' } }])
+  const [edges, setEdges, onEdgesChange] = useEdgesState<any>([])
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   
   const [showAddModal, setShowAddModal] = useState(false)
@@ -63,9 +63,11 @@ export default function App() {
     startDate: '',
     endDate: '',
     minAmount: '',
-    maxAmount: ''
+    maxAmount: '',
+    flowDirection: 'all' // 'all' | 'out' | 'in'
   })
   
+  const [isExpanding, setIsExpanding] = useState(false)
   const [newWallet, setNewWallet] = useState({ address: '', name: '', min_sol: 0, max_sol: 0, is_active: true })
 
   const handleCopy = (addr: string) => {
@@ -131,7 +133,8 @@ export default function App() {
           minAmount: advancedFilters.minAmount ? Number(advancedFilters.minAmount) : null,
           maxAmount: advancedFilters.maxAmount ? Number(advancedFilters.maxAmount) : null,
           startDate: advancedFilters.startDate || null,
-          endDate: advancedFilters.endDate || null
+          endDate: advancedFilters.endDate || null,
+          flowDirection: advancedFilters.flowDirection
         })
       })
       const data = await res.json()
@@ -163,6 +166,52 @@ export default function App() {
       setIsLoading(false)
     }
   }
+
+  const handleNodeDoubleClick = async (event: any, node: any) => {
+    if (node.id === 'empty' || node.id === 'err' || (node.data as any).isRoot) return
+    
+    setIsExpanding(true)
+    try {
+      const res = await fetch('/api/trace', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ 
+          address: node.id, 
+          tokens,
+          minAmount: advancedFilters.minAmount ? Number(advancedFilters.minAmount) : null,
+          maxAmount: advancedFilters.maxAmount ? Number(advancedFilters.maxAmount) : null,
+          startDate: advancedFilters.startDate || null,
+          endDate: advancedFilters.endDate || null,
+          flowDirection: advancedFilters.flowDirection,
+          centerX: node.position.x,
+          centerY: node.position.y
+        })
+      })
+      const data = await res.json()
+      
+      if (!data.error) {
+        // Merge nodes avoiding duplicates
+        setNodes(prev => {
+          const newNodes = data.nodes.filter((n: any) => !prev.some((p: any) => p.id === n.id))
+          // Also visually mark this node as expanded (by making it a root visually)
+          const updatedPrev = prev.map((p: any) => p.id === node.id ? { ...p, data: { ...p.data, isRoot: true } } : p)
+          return [...updatedPrev, ...newNodes]
+        })
+        
+        // Merge edges avoiding duplicates
+        setEdges(prev => {
+          const formattedEdges = data.edges.map((e: any) => ({ ...e, markerEnd: { type: 'arrowclosed' } }))
+          const newEdges = formattedEdges.filter((e: any) => !prev.some((p: any) => p.id === e.id))
+          return [...prev, ...newEdges]
+        })
+      }
+    } catch (e: any) {
+      console.error(e)
+    } finally {
+      setIsExpanding(false)
+    }
+  }
+
 
   const toggleToken = (t: string) => {
     setTokens(prev => prev.includes(t) ? prev.filter(x => x !== t) : [...prev, t])
@@ -358,13 +407,14 @@ export default function App() {
             
             <div className="absolute inset-0 bg-black z-0">
               <ReactFlow 
-                key={nodes.length + edges.length} // Force remount to trigger fitView
+                key={nodes.length > 0 && !isExpanding ? 'map' : 'expanding'} // Don't force fitView on expand
                 nodes={nodes} 
                 edges={edges}
                 nodeTypes={nodeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
-                fitView
+                onNodeDoubleClick={handleNodeDoubleClick}
+                fitView={!isExpanding}
                 colorMode="dark"
               >
                 <Background color="#555" gap={24} />
@@ -426,9 +476,21 @@ export default function App() {
 
               {/* Advanced Filters Panel */}
               {showAdvancedFilters && (
-                <div className="pointer-events-auto bg-gray-900/90 backdrop-blur-md border border-gray-800 rounded-2xl p-4 w-full max-w-2xl shadow-2xl mt-2 grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                <div className="pointer-events-auto bg-gray-900/90 backdrop-blur-md border border-gray-800 rounded-2xl p-4 w-full max-w-2xl shadow-2xl mt-2 grid grid-cols-3 gap-4 animate-in fade-in slide-in-from-top-2">
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-400 font-semibold block">Khoảng Thời Gian (Tùy chọn)</label>
+                    <label className="text-xs text-gray-400 font-semibold block">Hướng Dòng Tiền</label>
+                    <select 
+                      className="bg-gray-800 text-white text-xs p-2 rounded-lg border border-gray-700 w-full outline-none focus:border-cyan-500"
+                      value={advancedFilters.flowDirection}
+                      onChange={e => setAdvancedFilters({...advancedFilters, flowDirection: e.target.value})}
+                    >
+                      <option value="all">Tất cả (Vào & Ra)</option>
+                      <option value="out">Chỉ tiền Gửi đi (Outflow)</option>
+                      <option value="in">Chỉ tiền Nhận vào (Inflow)</option>
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-400 font-semibold block">Khoảng Thời Gian</label>
                     <div className="flex items-center space-x-2">
                       <input type="datetime-local" className="bg-gray-800 text-white text-xs p-2 rounded-lg border border-gray-700 w-full outline-none focus:border-cyan-500" value={advancedFilters.startDate} onChange={e => setAdvancedFilters({...advancedFilters, startDate: e.target.value})} title="Từ ngày" />
                       <span className="text-gray-500">-</span>
@@ -436,7 +498,7 @@ export default function App() {
                     </div>
                   </div>
                   <div className="space-y-2">
-                    <label className="text-xs text-gray-400 font-semibold block">Số lượng Tiền/Token (Tùy chọn)</label>
+                    <label className="text-xs text-gray-400 font-semibold block">Số lượng (SOL/Token)</label>
                     <div className="flex items-center space-x-2">
                       <input type="number" placeholder="Min" className="bg-gray-800 text-white text-xs p-2 rounded-lg border border-gray-700 w-full outline-none focus:border-cyan-500" value={advancedFilters.minAmount} onChange={e => setAdvancedFilters({...advancedFilters, minAmount: e.target.value})} />
                       <span className="text-gray-500">-</span>
@@ -485,6 +547,20 @@ export default function App() {
               >
                 <Activity className="w-5 h-5" />
               </button>
+            )}
+            
+            {/* Expanding Overlay */}
+            {isExpanding && (
+              <div className="absolute inset-0 z-50 bg-gray-950/50 backdrop-blur-sm flex items-center justify-center pointer-events-auto">
+                <div className="bg-gray-900 border border-cyan-500/30 p-6 rounded-2xl shadow-2xl flex flex-col items-center space-y-4 animate-in zoom-in-95">
+                  <div className="relative w-12 h-12 flex items-center justify-center">
+                    <div className="absolute inset-0 rounded-full border-t-2 border-cyan-400 animate-spin"></div>
+                    <Activity className="w-5 h-5 text-cyan-400 animate-pulse" />
+                  </div>
+                  <h3 className="text-white font-medium">Đang truy vết mở rộng nhánh...</h3>
+                  <p className="text-gray-400 text-sm">Quá trình này có thể mất vài giây</p>
+                </div>
+              </div>
             )}
 
           </div>

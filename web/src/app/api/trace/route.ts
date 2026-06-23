@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
   try {
-    const { address, tokens, minAmount, maxAmount, startDate, endDate } = await req.json()
+    const { address, tokens, minAmount, maxAmount, startDate, endDate, flowDirection, centerX = 0, centerY = 0 } = await req.json()
     if (!address) return NextResponse.json({ error: 'Missing address' }, { status: 400 })
 
     const apiKey = process.env.HELIUS_API_KEY
@@ -35,6 +35,10 @@ export async function POST(req: Request) {
         for (const t of tx.nativeTransfers) {
           if (t.fromUserAccount === address || t.toUserAccount === address) {
             const isOut = t.fromUserAccount === address
+            // Flow Filter
+            if (flowDirection === 'out' && !isOut) continue
+            if (flowDirection === 'in' && isOut) continue
+
             const other = isOut ? t.toUserAccount : t.fromUserAccount
             const amount = t.amount / 1e9
             
@@ -60,6 +64,10 @@ export async function POST(req: Request) {
 
           if (symbol && (t.fromUserAccount === address || t.toUserAccount === address)) {
             const isOut = t.fromUserAccount === address
+            // Flow Filter
+            if (flowDirection === 'out' && !isOut) continue
+            if (flowDirection === 'in' && isOut) continue
+
             const other = isOut ? t.toUserAccount : t.fromUserAccount
             const amount = t.tokenAmount
             
@@ -80,8 +88,8 @@ export async function POST(req: Request) {
     const sortedWallets = Array.from(volumeMap.entries()).sort((a, b) => b[1].volume - a[1].volume)
     
     // Add root node
-    const rootX = 0
-    const rootY = 0
+    const rootX = Number(centerX)
+    const rootY = Number(centerY)
     nodesMap.set(address, { 
       id: address, 
       type: 'bubble',
