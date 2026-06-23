@@ -153,10 +153,11 @@ def render_wallet_detail(index):
     msg += f"📊 <b>Giới hạn:</b> {w['min_sol']} - {w['max_sol']} SOL\n"
     msg += f"🟢 <b>Trạng thái:</b> {'Đang theo dõi (✅)' if is_active else 'Tạm dừng (⏸️)'}\n"
     
-    auto_amt = w.get('auto_add_amount')
+    auto_min = w.get('auto_add_min')
+    auto_max = w.get('auto_add_max')
     auto_name = w.get('auto_add_name')
-    if auto_amt is not None and auto_name:
-        msg += f"🤖 <b>Auto-Add:</b> {auto_amt} SOL -> <code>{auto_name}</code>"
+    if auto_min is not None and auto_max is not None and auto_name:
+        msg += f"🤖 <b>Auto-Add:</b> {auto_min} -> {auto_max} SOL (Tên: <code>{auto_name}</code>)"
     else:
         msg += f"🤖 <b>Auto-Add:</b> Tắt"
     
@@ -283,20 +284,29 @@ def handle_webhook(payload):
             elif user_state.startswith('WAITING_AUTOADD_'):
                 index = int(user_state.split('_')[2])
                 if text.strip().lower() == 'off' or text.strip().lower() == 'tắt':
-                    update_wallet_autoadd(index, None, None)
+                    update_wallet_autoadd(index, None, None, None)
                     send_message("✅ Đã tắt tính năng Auto-Add cho ví này.")
                 else:
                     parts = text.strip().split()
                     if len(parts) >= 2:
                         try:
-                            amt = float(parts[0])
-                            name = " ".join(parts[1:])
-                            update_wallet_autoadd(index, amt, name)
-                            send_message(f"✅ Đã cấu hình Auto-Add: Nếu ví đích mới nhận đúng ~{amt} SOL, sẽ tự động lưu với tên '{name}'.")
+                            # If they entered "2.0 5.0 Vi_Phu"
+                            if len(parts) >= 3 and parts[0].replace('.', '', 1).isdigit() and parts[1].replace('.', '', 1).isdigit():
+                                min_amt = float(parts[0])
+                                max_amt = float(parts[1])
+                                name = " ".join(parts[2:])
+                                update_wallet_autoadd(index, min_amt, max_amt, name)
+                                send_message(f"✅ Đã cấu hình Auto-Add: Nếu ví đích mới nhận trong khoảng {min_amt} đến {max_amt} SOL, sẽ tự động lưu với tên '{name}'.")
+                            else:
+                                # Exact amount logic (fallback) "2.1 Vi_Phu"
+                                amt = float(parts[0])
+                                name = " ".join(parts[1:])
+                                update_wallet_autoadd(index, amt - 0.05, amt + 0.05, name)
+                                send_message(f"✅ Đã cấu hình Auto-Add: Nếu ví đích mới nhận đúng ~{amt} SOL (+/- 0.05), sẽ tự động lưu với tên '{name}'.")
                         except ValueError:
                             send_message("❌ Định dạng số SOL không hợp lệ.")
                     else:
-                        send_message("❌ Vui lòng nhập đúng cú pháp: `Số_SOL Tên_Ví`")
+                        send_message("❌ Vui lòng nhập đúng cú pháp: `Số_SOL Tên_Ví` HOẶC `Min_SOL Max_SOL Tên_Ví`")
                         
                 msg, reply_markup = render_wallet_detail(index)
                 send_message(msg, reply_markup)
@@ -566,9 +576,13 @@ def handle_webhook(payload):
             reply_markup = {"inline_keyboard": [[{"text": "⬅️ Hủy", "callback_data": "cancel_action"}]]}
             send_message(
                 "🤖 <b>CÀI ĐẶT AUTO-ADD VÍ CON</b>\n\n"
-                "Gửi cho tôi <code>Số_SOL Tên_Ví</code>.\n\n"
-                "Ví dụ: Nếu Dev gửi ~2.1 SOL sang một ví MỚI HOÀN TOÀN, bạn muốn lưu nó là 'Ví_Phụ', hãy nhắn:\n"
-                "<code>2.1 Vi_Phu</code>\n\n"
+                "Bạn có 2 cách cài đặt:\n\n"
+                "<b>1. Theo khoảng Min - Max:</b>\n"
+                "<code>Min_SOL Max_SOL Tên_Ví</code>\n"
+                "(VD: <code>2.0 5.0 Vi_Phu</code> - Bắt các lệnh từ 2 đến 5 SOL)\n\n"
+                "<b>2. Theo 1 số chính xác (± 0.05 fee):</b>\n"
+                "<code>Số_SOL Tên_Ví</code>\n"
+                "(VD: <code>2.1 Vi_Phu</code> - Bắt các lệnh đúng ~2.1 SOL)\n\n"
                 "👉 Để TẮT tính năng này, nhắn: <code>off</code>", 
                 reply_markup=reply_markup
             )

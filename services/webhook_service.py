@@ -83,12 +83,13 @@ def process_helius_webhook(payload):
                             from services.rpc_service import get_wallet_info
                             balance, is_new, creation_date = get_wallet_info(to_user)
                             
-                            auto_add_amount = wallet.get('auto_add_amount')
+                            auto_add_min = wallet.get('auto_add_min')
+                            auto_add_max = wallet.get('auto_add_max')
                             auto_add_name = wallet.get('auto_add_name')
                             
                             is_auto_added = False
-                            if is_new and auto_add_amount is not None and auto_add_name:
-                                if abs(amount_sol - auto_add_amount) <= 0.05:
+                            if is_new and auto_add_min is not None and auto_add_max is not None and auto_add_name:
+                                if auto_add_min <= amount_sol <= auto_add_max:
                                     new_name = f"{auto_add_name}_{to_user[:4]}"
                                     from utils.persistence import add_wallet
                                     success, note, new_idx = add_wallet(to_user, 0.0, 1000.0, new_name)
