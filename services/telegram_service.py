@@ -289,9 +289,6 @@ def handle_webhook(payload):
             
             # Dọn dẹp trạng thái ngay lập tức
             set_alarm_state(False)
-            state['spam_message_ids'] = []
-            with open('data/alarm_state.json', 'w', encoding='utf-8') as f:
-                json.dump(state, f, indent=4)
             
             # Trả lời nhanh để tắt hiệu ứng loading của nút bấm
             answer("✅ Đã dừng và đang dọn dẹp tin nhắn!")
