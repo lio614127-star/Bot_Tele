@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import useSWR from 'swr'
 import { Activity, Settings, Zap, Shield, Search, Loader2, Edit3, Copy, CheckCircle2 } from 'lucide-react'
-import { ReactFlow, Background, Controls, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
+import { ReactFlow, Background, Controls, useNodesState, useEdgesState } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
@@ -97,7 +97,7 @@ export default function App() {
         // Add markerEnd to edges for arrows
         const formattedEdges = data.edges.map((e: any) => ({
           ...e,
-          markerEnd: { type: MarkerType.ArrowClosed }
+          markerEnd: { type: 'arrowclosed' }
         }))
         setNodes(data.nodes)
         setEdges(formattedEdges)
@@ -304,10 +304,26 @@ export default function App() {
         )}
 
         {tab === 'map' && (
-          <div className="flex-1 relative flex flex-col">
+          <div className="flex-1 relative w-full h-[calc(100vh-64px)]">
+            
+            <div className="absolute inset-0 bg-black z-0">
+              <ReactFlow 
+                key={nodes.length + edges.length} // Force remount to trigger fitView
+                nodes={nodes} 
+                edges={edges}
+                onNodesChange={onNodesChange}
+                onEdgesChange={onEdgesChange}
+                fitView
+                colorMode="dark"
+              >
+                <Background color="#555" gap={24} />
+                <Controls className="bg-gray-900 border-gray-800 fill-white" showInteractive={false} />
+              </ReactFlow>
+            </div>
+
             {/* Search Bar Overlay */}
-            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-full max-w-2xl px-4 flex flex-col items-center space-y-2">
-              <div className="bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-2xl shadow-2xl p-2 flex items-center space-x-2 focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/50 transition-all w-full">
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10 w-full max-w-2xl px-4 flex flex-col items-center space-y-2 pointer-events-none">
+              <div className="pointer-events-auto bg-gray-900/80 backdrop-blur-md border border-gray-700 rounded-2xl shadow-2xl p-2 flex items-center space-x-2 focus-within:border-cyan-500/50 focus-within:ring-1 focus-within:ring-cyan-500/50 transition-all w-full">
                 <Search className="w-5 h-5 text-gray-400 ml-2" />
                 <input 
                   type="text" 
@@ -327,13 +343,13 @@ export default function App() {
               </div>
 
               {errorMsg && (
-                <div className={`text-sm px-4 py-2 rounded-lg border w-full text-center ${errorMsg.startsWith('✅') ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-red-500/20 text-red-400 border-red-500/50'}`}>
+                <div className={`pointer-events-auto text-sm px-4 py-2 rounded-lg border w-full text-center ${errorMsg.startsWith('✅') ? 'bg-green-500/20 text-green-400 border-green-500/50' : 'bg-red-500/20 text-red-400 border-red-500/50'}`}>
                   {errorMsg}
                 </div>
               )}
               
               {/* Token Filters */}
-              <div className="flex items-center space-x-4 bg-gray-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 text-sm mt-2">
+              <div className="pointer-events-auto flex items-center space-x-4 bg-gray-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 text-sm mt-2">
                 <span className="text-gray-400 text-xs font-semibold mr-2">BỘ LỌC:</span>
                 {['SOL', 'USDC', 'USDT', 'wSOL'].map(t => (
                   <label key={t} className="flex items-center space-x-1.5 cursor-pointer">
@@ -349,20 +365,6 @@ export default function App() {
               </div>
             </div>
 
-            <div className="flex-1 bg-black w-full h-[calc(100vh-64px)]">
-              <ReactFlow 
-                key={nodes.length + edges.length} // Force remount to trigger fitView
-                nodes={nodes} 
-                edges={edges}
-                onNodesChange={onNodesChange}
-                onEdgesChange={onEdgesChange}
-                fitView
-                colorMode="dark"
-              >
-                <Background color="#555" gap={24} />
-                <Controls className="bg-gray-900 border-gray-800 fill-white" />
-              </ReactFlow>
-            </div>
           </div>
         )}
       </main>
