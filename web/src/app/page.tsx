@@ -57,14 +57,23 @@ export default function App() {
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [showEditModal, setShowEditModal] = useState(false)
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
+  const [advancedFilters, setAdvancedFilters] = useState({
+    startDate: '',
+    endDate: '',
+    minAmount: '',
+    maxAmount: ''
+  })
+  
+  const [newWallet, setNewWallet] = useState({ address: '', name: '', min_sol: 0, max_sol: 0, is_active: true })
+
   const handleCopy = (addr: string) => {
     navigator.clipboard.writeText(addr)
     setCopiedAddress(addr)
     setTimeout(() => setCopiedAddress(null), 2000)
   }
-
-  const [showAddModal, setShowAddModal] = useState(false)
-  const [newWallet, setNewWallet] = useState({ address: '', name: '', min_sol: 0.1, max_sol: 100 })
 
   const handleAddWallet = async () => {
     if (!newWallet.address || !wallets) return
@@ -117,7 +126,14 @@ export default function App() {
       const res = await fetch('/api/trace', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ address: searchAddr, tokens })
+        body: JSON.stringify({ 
+          address: searchAddr, 
+          tokens,
+          minAmount: advancedFilters.minAmount ? Number(advancedFilters.minAmount) : null,
+          maxAmount: advancedFilters.maxAmount ? Number(advancedFilters.maxAmount) : null,
+          startDate: advancedFilters.startDate || null,
+          endDate: advancedFilters.endDate || null
+        })
       })
       const data = await res.json()
       
@@ -384,21 +400,52 @@ export default function App() {
                 </div>
               )}
               
-              {/* Token Filters */}
-              <div className="pointer-events-auto flex items-center space-x-4 bg-gray-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 text-sm mt-2">
-                <span className="text-gray-400 text-xs font-semibold mr-2">BỘ LỌC:</span>
-                {['SOL', 'USDC', 'USDT', 'wSOL'].map(t => (
-                  <label key={t} className="flex items-center space-x-1.5 cursor-pointer">
-                    <input 
-                      type="checkbox" 
-                      checked={tokens.includes(t)}
-                      onChange={() => toggleToken(t)}
-                      className="rounded border-gray-700 text-cyan-500 focus:ring-cyan-500 bg-gray-800"
-                    />
-                    <span className={tokens.includes(t) ? 'text-gray-200' : 'text-gray-500'}>{t}</span>
-                  </label>
-                ))}
+              {/* Token Filters and Advanced Toggle */}
+              <div className="pointer-events-auto flex items-center justify-between bg-gray-900/80 backdrop-blur-md px-4 py-2 rounded-2xl border border-gray-800 text-sm mt-2 w-full max-w-2xl shadow-xl">
+                <div className="flex items-center space-x-4">
+                  <span className="text-gray-400 text-xs font-semibold mr-2">BỘ LỌC:</span>
+                  {['SOL', 'USDC', 'USDT', 'wSOL'].map(t => (
+                    <label key={t} className="flex items-center space-x-1.5 cursor-pointer">
+                      <input 
+                        type="checkbox" 
+                        checked={tokens.includes(t)}
+                        onChange={() => toggleToken(t)}
+                        className="rounded border-gray-700 text-cyan-500 focus:ring-cyan-500 bg-gray-800"
+                      />
+                      <span className={tokens.includes(t) ? 'text-gray-200' : 'text-gray-500'}>{t}</span>
+                    </label>
+                  ))}
+                </div>
+                <button 
+                  onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+                  className={`flex items-center space-x-1 text-xs font-semibold transition-colors ${showAdvancedFilters || Object.values(advancedFilters).some(v => v !== '') ? 'text-cyan-400' : 'text-gray-500 hover:text-gray-300'}`}
+                >
+                  <Settings className="w-3.5 h-3.5" />
+                  <span>Lọc Nâng Cao</span>
+                </button>
               </div>
+
+              {/* Advanced Filters Panel */}
+              {showAdvancedFilters && (
+                <div className="pointer-events-auto bg-gray-900/90 backdrop-blur-md border border-gray-800 rounded-2xl p-4 w-full max-w-2xl shadow-2xl mt-2 grid grid-cols-2 gap-4 animate-in fade-in slide-in-from-top-2">
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-400 font-semibold block">Khoảng Thời Gian (Tùy chọn)</label>
+                    <div className="flex items-center space-x-2">
+                      <input type="datetime-local" className="bg-gray-800 text-white text-xs p-2 rounded-lg border border-gray-700 w-full outline-none focus:border-cyan-500" value={advancedFilters.startDate} onChange={e => setAdvancedFilters({...advancedFilters, startDate: e.target.value})} title="Từ ngày" />
+                      <span className="text-gray-500">-</span>
+                      <input type="datetime-local" className="bg-gray-800 text-white text-xs p-2 rounded-lg border border-gray-700 w-full outline-none focus:border-cyan-500" value={advancedFilters.endDate} onChange={e => setAdvancedFilters({...advancedFilters, endDate: e.target.value})} title="Đến ngày" />
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-xs text-gray-400 font-semibold block">Số lượng Tiền/Token (Tùy chọn)</label>
+                    <div className="flex items-center space-x-2">
+                      <input type="number" placeholder="Min" className="bg-gray-800 text-white text-xs p-2 rounded-lg border border-gray-700 w-full outline-none focus:border-cyan-500" value={advancedFilters.minAmount} onChange={e => setAdvancedFilters({...advancedFilters, minAmount: e.target.value})} />
+                      <span className="text-gray-500">-</span>
+                      <input type="number" placeholder="Max" className="bg-gray-800 text-white text-xs p-2 rounded-lg border border-gray-700 w-full outline-none focus:border-cyan-500" value={advancedFilters.maxAmount} onChange={e => setAdvancedFilters({...advancedFilters, maxAmount: e.target.value})} />
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Sidebar Wallets List */}

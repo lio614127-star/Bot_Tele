@@ -2,9 +2,15 @@ import { NextResponse } from 'next/server'
 
 export async function POST(req: Request) {
   try {
-    const { address, tokens } = await req.json()
+    const { address, tokens, minAmount, maxAmount, startDate, endDate } = await req.json()
+    if (!address) return NextResponse.json({ error: 'Missing address' }, { status: 400 })
+
     const apiKey = process.env.HELIUS_API_KEY
     if (!apiKey) return NextResponse.json({ error: 'Missing Helius API Key' }, { status: 500 })
+
+    // Convert dates to Unix timestamps (seconds)
+    const startTimestamp = startDate ? new Date(startDate).getTime() / 1000 : 0
+    const endTimestamp = endDate ? new Date(endDate).getTime() / 1000 : Infinity
 
     const url = `https://api.helius.xyz/v0/addresses/${address}/transactions?api-key=${apiKey}`
     const res = await fetch(url)
@@ -21,6 +27,9 @@ export async function POST(req: Request) {
     const volumeMap = new Map<string, { volume: number, isOut: boolean, symbol: string }>()
 
     for (const tx of txs) {
+      // Filter by timestamp
+      if (tx.timestamp < startTimestamp || tx.timestamp > endTimestamp) continue
+
       // Process Native SOL
       if (tokens.includes('SOL') && tx.nativeTransfers) {
         for (const t of tx.nativeTransfers) {
@@ -28,7 +37,11 @@ export async function POST(req: Request) {
             const isOut = t.fromUserAccount === address
             const other = isOut ? t.toUserAccount : t.fromUserAccount
             const amount = t.amount / 1e9
-            if (amount < 0.01) continue
+            
+            // Filter by amount
+            if (minAmount && amount < minAmount) continue
+            if (maxAmount && amount > maxAmount) continue
+            if (!minAmount && amount < 0.01) continue // Default tiny dust filter
 
             const current = volumeMap.get(other) || { volume: 0, isOut, symbol: 'SOL' }
             current.volume += amount
@@ -49,7 +62,11 @@ export async function POST(req: Request) {
             const isOut = t.fromUserAccount === address
             const other = isOut ? t.toUserAccount : t.fromUserAccount
             const amount = t.tokenAmount
-            if (amount < 1) continue // Skip < 1 token
+            
+            // Filter by amount
+            if (minAmount && amount < minAmount) continue
+            if (maxAmount && amount > maxAmount) continue
+            if (!minAmount && amount < 1) continue // Default tiny dust filter for tokens
 
             const current = volumeMap.get(other) || { volume: 0, isOut, symbol }
             current.volume += amount
