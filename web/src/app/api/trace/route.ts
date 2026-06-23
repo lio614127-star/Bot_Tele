@@ -24,8 +24,7 @@ export async function POST(req: Request) {
     let yOff = 100
 
     for (const tx of txs) {
-      if (tx.type !== 'TRANSFER' && tx.type !== 'UNKNOWN') continue
-
+      // We removed the strict type filter because SWAP and other types also have nativeTransfers/tokenTransfers
       // Process Native SOL
       if (tokens.includes('SOL') && tx.nativeTransfers) {
         for (const t of tx.nativeTransfers) {

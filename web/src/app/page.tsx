@@ -93,7 +93,7 @@ export default function App() {
         return
       }
 
-      if (data.nodes && data.nodes.length > 0) {
+      if (data.nodes && data.nodes.length > 1) {
         // Add markerEnd to edges for arrows
         const formattedEdges = data.edges.map((e: any) => ({
           ...e,
@@ -102,7 +102,7 @@ export default function App() {
         setNodes(data.nodes)
         setEdges(formattedEdges)
       } else {
-        setNodes([{ id: 'empty', position: { x: 250, y: 200 }, data: { label: 'Không tìm thấy giao dịch chuyển tiền nào!' }, style: { backgroundColor: '#f59e0b', color: '#fff' } } as any])
+        setNodes([{ id: 'empty', position: { x: 250, y: 200 }, data: { label: 'Không có biến động số dư nào (Transfer/Swap) gần đây!' }, style: { backgroundColor: '#f59e0b', color: '#fff' } } as any])
         setEdges([])
       }
     } catch (e: any) {
@@ -355,8 +355,9 @@ export default function App() {
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 fitView
+                colorMode="dark"
               >
-                <Background color="#333" gap={16} />
+                <Background color="#555" gap={24} />
                 <Controls className="bg-gray-900 border-gray-800 fill-white" />
               </ReactFlow>
             </div>
