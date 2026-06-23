@@ -47,9 +47,38 @@ export async function POST(req: Request) {
             if (maxAmount && amount > maxAmount) continue
             if (!minAmount && amount < 0.01) continue // Default tiny dust filter
 
-            const current = volumeMap.get(other) || { volume: 0, isOut, symbol: 'SOL' }
-            current.volume += amount
-            volumeMap.set(other, current)
+            if (!volumeMap.has(other)) volumeMap.set(other, { volume: 0, isOut, symbol: 'SOL' })
+            volumeMap.get(other)!.volume += amount
+          }
+        }
+
+        // Fallback for SOL transfers if nativeTransfers missed it (e.g. WITHDRAW FROM NONCE, System Program transfers)
+        if (tx.nativeTransfers.length === 0 && tx.accountData) {
+          const myData = tx.accountData.find((a: any) => a.account === address)
+          if (myData && Math.abs(myData.nativeBalanceChange) > 1000000) { // Ignore small fees (< 0.001 SOL)
+            const isOut = myData.nativeBalanceChange < 0
+            
+            if (flowDirection === 'out' && !isOut) continue
+            if (flowDirection === 'in' && isOut) continue
+
+            const counterpart = tx.accountData.find((a: any) => 
+              a.account !== address && 
+              a.account !== '11111111111111111111111111111111' && 
+              a.account !== 'ComputeBudget111111111111111111111111111111' &&
+              (isOut ? a.nativeBalanceChange > 0 : a.nativeBalanceChange < 0)
+            )
+
+            if (counterpart) {
+              const other = counterpart.account
+              const amount = Math.abs(isOut ? counterpart.nativeBalanceChange : myData.nativeBalanceChange) / 1e9
+              
+              if (!minAmount || amount >= minAmount) {
+                if (!maxAmount || amount <= maxAmount) {
+                  if (!volumeMap.has(other)) volumeMap.set(other, { volume: 0, isOut, symbol: 'SOL' })
+                  volumeMap.get(other)!.volume += amount
+                }
+              }
+            }
           }
         }
       }
