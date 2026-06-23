@@ -460,15 +460,15 @@ export default function App() {
                   </button>
                 </div>
                 <div className="overflow-y-auto flex-1 p-2 space-y-1">
-                  {nodes.filter(n => !n.data.isRoot && n.id !== 'empty' && n.id !== 'err').sort((a,b) => b.data.volume - a.data.volume).map((n, i) => (
+                  {nodes.filter(n => !(n.data as any).isRoot && n.id !== 'empty' && n.id !== 'err').sort((a,b) => (b.data as any).volume - (a.data as any).volume).map((n, i) => (
                     <div key={n.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer text-sm">
                       <div className="flex items-center space-x-2 truncate">
                         <span className="text-gray-500 font-mono text-xs w-5">#{i+1}</span>
-                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getBubbleColor(n.data.label, n.data.isRoot) }}></div>
-                        <span className="text-gray-300 font-mono truncate">{n.data.label.slice(0,4)}...{n.data.label.slice(-4)}</span>
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getBubbleColor((n.data as any).label, (n.data as any).isRoot) }}></div>
+                        <span className="text-gray-300 font-mono truncate">{(n.data as any).label.slice(0,4)}...{(n.data as any).label.slice(-4)}</span>
                       </div>
                       <div className="text-cyan-400 font-semibold text-xs whitespace-nowrap ml-2">
-                        {n.data.volume?.toFixed(2)}
+                        {(n.data as any).volume?.toFixed(2)}
                       </div>
                     </div>
                   ))}
