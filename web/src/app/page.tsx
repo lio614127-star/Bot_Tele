@@ -17,12 +17,14 @@ export default function App() {
   const [searchAddr, setSearchAddr] = useState('')
   const [tokens, setTokens] = useState(['SOL', 'USDC', 'USDT', 'wSOL'])
   const [isLoading, setIsLoading] = useState(false)
+  const [errorMsg, setErrorMsg] = useState('')
   const [nodes, setNodes, onNodesChange] = useNodesState([{ id: '1', position: { x: 250, y: 200 }, data: { label: 'Chưa có dữ liệu quét' } }])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   
   const toggleCombatMode = async () => {
     if (!botState) return
     const newState = { ...botState, combat_mode: !botState.combat_mode }
+    mutateState(newState, false) // Cập nhật UI ngay lập tức (Optimistic Update)
     await fetch('/api/state', { method: 'POST', body: JSON.stringify(newState) })
     mutateState()
   }
@@ -30,6 +32,7 @@ export default function App() {
   const handleTrace = async () => {
     if (!searchAddr) return
     setIsLoading(true)
+    setErrorMsg('')
     try {
       const res = await fetch('/api/trace', {
         method: 'POST',
@@ -37,7 +40,15 @@ export default function App() {
         body: JSON.stringify({ address: searchAddr, tokens })
       })
       const data = await res.json()
-      if (data.nodes) {
+      
+      if (data.error) {
+        setErrorMsg(data.error)
+        setNodes([{ id: 'err', position: { x: 250, y: 200 }, data: { label: `❌ Lỗi: ${data.error} (Thiếu Helius API Key?)` }, style: { backgroundColor: '#ef4444', color: '#fff' } }])
+        setEdges([])
+        return
+      }
+
+      if (data.nodes && data.nodes.length > 0) {
         // Add markerEnd to edges for arrows
         const formattedEdges = data.edges.map((e: any) => ({
           ...e,
@@ -45,8 +56,12 @@ export default function App() {
         }))
         setNodes(data.nodes)
         setEdges(formattedEdges)
+      } else {
+        setNodes([{ id: 'empty', position: { x: 250, y: 200 }, data: { label: 'Không tìm thấy giao dịch chuyển tiền nào!' }, style: { backgroundColor: '#f59e0b', color: '#fff' } }])
+        setEdges([])
       }
-    } catch (e) {
+    } catch (e: any) {
+      setErrorMsg(e.message)
       console.error(e)
     } finally {
       setIsLoading(false)
@@ -174,7 +189,7 @@ export default function App() {
               </div>
               
               {/* Token Filters */}
-              <div className="flex items-center space-x-4 bg-gray-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 text-sm">
+              <div className="flex items-center space-x-4 bg-gray-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 text-sm mt-2">
                 <span className="text-gray-400 text-xs font-semibold mr-2">BỘ LỌC:</span>
                 {['SOL', 'USDC', 'USDT', 'wSOL'].map(t => (
                   <label key={t} className="flex items-center space-x-1.5 cursor-pointer">
