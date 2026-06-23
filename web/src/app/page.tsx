@@ -2,14 +2,49 @@
 
 import { useState, useCallback } from 'react'
 import useSWR from 'swr'
-import { Activity, Settings, Zap, Shield, Search, Loader2, Edit3, Copy, CheckCircle2 } from 'lucide-react'
-import { ReactFlow, Background, Controls, useNodesState, useEdgesState } from '@xyflow/react'
+import { Activity, Settings, Zap, Shield, Search, Loader2, Edit3, Copy, CheckCircle2, X } from 'lucide-react'
+import { ReactFlow, Background, Controls, useNodesState, useEdgesState, Handle, Position } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
+
+const getBubbleColor = (label: string, isRoot: boolean) => {
+  if (isRoot) return '#06b6d4'
+  const colors = ['#f43f5e', '#a855f7', '#3b82f6', '#10b981', '#f59e0b', '#0ea5e9']
+  return colors[label ? label.charCodeAt(0) % colors.length : 0]
+}
+
+function BubbleNode({ data }: any) {
+  const size = data.isRoot ? 120 : Math.max(40, Math.min(150, 40 + data.volume * 2))
+  const bgColor = getBubbleColor(data.label, data.isRoot)
+
+  return (
+    <div 
+      className="rounded-full shadow-2xl flex items-center justify-center relative group transition-transform hover:scale-110 cursor-pointer"
+      style={{ width: size, height: size, backgroundColor: bgColor, opacity: 0.9, border: data.isRoot ? '4px solid #fff' : '2px solid rgba(255,255,255,0.3)' }}
+    >
+      <Handle type="target" position={Position.Top} className="opacity-0" />
+      
+      {/* Tooltip on hover */}
+      <div className="absolute -top-12 bg-gray-900 text-white text-xs px-3 py-1.5 rounded-lg border border-gray-700 opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50 shadow-xl">
+        <span className="font-mono">{data.isRoot ? '[GỐC] ' : ''}{data.label.slice(0,6)}...{data.label.slice(-6)}</span>
+        <div className="text-gray-400 text-[10px] text-center mt-0.5 font-semibold">
+          Volume: {data.volume?.toFixed(2)}
+        </div>
+      </div>
+
+      <Handle type="source" position={Position.Bottom} className="opacity-0" />
+    </div>
+  )
+}
+
+const nodeTypes = {
+  bubble: BubbleNode
+}
 
 const fetcher = (url: string) => fetch(url).then(res => res.json())
 
 export default function App() {
   const [tab, setTab] = useState<'map' | 'settings'>('map')
+  const [showSidebar, setShowSidebar] = useState(true)
   const { data: wallets, mutate: mutateWallets } = useSWR('/api/wallets', fetcher)
   const { data: botState, mutate: mutateState } = useSWR('/api/state', fetcher)
   
@@ -311,6 +346,7 @@ export default function App() {
                 key={nodes.length + edges.length} // Force remount to trigger fitView
                 nodes={nodes} 
                 edges={edges}
+                nodeTypes={nodeTypes}
                 onNodesChange={onNodesChange}
                 onEdgesChange={onEdgesChange}
                 fitView
@@ -364,6 +400,46 @@ export default function App() {
                 ))}
               </div>
             </div>
+
+            {/* Sidebar Wallets List */}
+            {nodes.length > 1 && showSidebar && (
+              <div className="absolute top-24 right-4 z-20 w-80 bg-gray-900/90 backdrop-blur-md border border-gray-800 rounded-2xl shadow-2xl overflow-hidden flex flex-col pointer-events-auto" style={{ maxHeight: 'calc(100vh - 120px)' }}>
+                <div className="px-4 py-3 border-b border-gray-800 flex justify-between items-center bg-gray-900">
+                  <h3 className="text-white font-semibold flex items-center space-x-2">
+                    <Activity className="w-4 h-4 text-cyan-500" />
+                    <span>Wallets List</span>
+                  </h3>
+                  <button onClick={() => setShowSidebar(false)} className="text-gray-500 hover:text-white transition-colors">
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+                <div className="overflow-y-auto flex-1 p-2 space-y-1">
+                  {nodes.filter(n => !n.data.isRoot && n.id !== 'empty' && n.id !== 'err').sort((a,b) => b.data.volume - a.data.volume).map((n, i) => (
+                    <div key={n.id} className="flex items-center justify-between p-2 rounded-lg hover:bg-gray-800 transition-colors cursor-pointer text-sm">
+                      <div className="flex items-center space-x-2 truncate">
+                        <span className="text-gray-500 font-mono text-xs w-5">#{i+1}</span>
+                        <div className="w-2 h-2 rounded-full" style={{ backgroundColor: getBubbleColor(n.data.label, n.data.isRoot) }}></div>
+                        <span className="text-gray-300 font-mono truncate">{n.data.label.slice(0,4)}...{n.data.label.slice(-4)}</span>
+                      </div>
+                      <div className="text-cyan-400 font-semibold text-xs whitespace-nowrap ml-2">
+                        {n.data.volume?.toFixed(2)}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {/* Show Sidebar Button */}
+            {nodes.length > 1 && !showSidebar && (
+              <button 
+                onClick={() => setShowSidebar(true)}
+                className="absolute top-24 right-4 z-20 bg-gray-900/90 backdrop-blur-md border border-gray-800 rounded-xl p-3 shadow-2xl pointer-events-auto text-gray-400 hover:text-white transition-colors"
+                title="Hiện danh sách ví"
+              >
+                <Activity className="w-5 h-5" />
+              </button>
+            )}
 
           </div>
         )}

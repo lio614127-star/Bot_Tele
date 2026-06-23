@@ -17,14 +17,10 @@ export async function POST(req: Request) {
     const nodesMap = new Map()
     const edgesMap = new Map()
 
-    // Add root node
-    nodesMap.set(address, { id: address, data: { label: `[Root]\n${address.slice(0,4)}...${address.slice(-4)}` }, position: { x: 400, y: 300 }, style: { backgroundColor: '#06b6d4', color: '#000', fontWeight: 'bold', padding: '10px', borderRadius: '8px' } })
-
-    let xOff = 100
-    let yOff = 100
+    // Aggregate volumes
+    const volumeMap = new Map<string, { volume: number, isOut: boolean, symbol: string }>()
 
     for (const tx of txs) {
-      // We removed the strict type filter because SWAP and other types also have nativeTransfers/tokenTransfers
       // Process Native SOL
       if (tokens.includes('SOL') && tx.nativeTransfers) {
         for (const t of tx.nativeTransfers) {
@@ -32,66 +28,88 @@ export async function POST(req: Request) {
             const isOut = t.fromUserAccount === address
             const other = isOut ? t.toUserAccount : t.fromUserAccount
             const amount = t.amount / 1e9
-            
-            if (amount < 0.01) continue // Skip tiny fees
+            if (amount < 0.01) continue
 
-            if (!nodesMap.has(other)) {
-              nodesMap.set(other, { id: other, data: { label: `${other.slice(0,4)}...${other.slice(-4)}` }, position: { x: xOff, y: yOff }, style: { backgroundColor: '#1f2937', color: '#fff' } })
-              xOff += 150
-              if (xOff > 800) { xOff = 100; yOff += 100 }
-            }
-
-            const edgeId = `${t.fromUserAccount}-${t.toUserAccount}-SOL`
-            edgesMap.set(edgeId, {
-              id: edgeId,
-              source: t.fromUserAccount,
-              target: t.toUserAccount,
-              label: `${amount.toFixed(2)} SOL`,
-              animated: true,
-              style: { stroke: '#06b6d4' }
-            })
+            const current = volumeMap.get(other) || { volume: 0, isOut, symbol: 'SOL' }
+            current.volume += amount
+            volumeMap.set(other, current)
           }
         }
       }
 
-      // Process Tokens (USDC, USDT, wSOL)
+      // Process SPL Tokens
       if (tx.tokenTransfers) {
         for (const t of tx.tokenTransfers) {
-          // Token mint checks
-          const isUSDC = t.mint === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v'
-          const isUSDT = t.mint === 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB'
-          const isWSOL = t.mint === 'So11111111111111111111111111111111111111112'
-
           let symbol = ''
-          if (isUSDC && tokens.includes('USDC')) symbol = 'USDC'
-          else if (isUSDT && tokens.includes('USDT')) symbol = 'USDT'
-          else if (isWSOL && tokens.includes('wSOL')) symbol = 'wSOL'
-          else continue
+          if (tokens.includes('USDC') && t.mint === 'EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v') symbol = 'USDC'
+          if (tokens.includes('USDT') && t.mint === 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB') symbol = 'USDT'
+          if (tokens.includes('wSOL') && t.mint === 'So11111111111111111111111111111111111111112') symbol = 'wSOL'
 
-          if (t.fromUserAccount === address || t.toUserAccount === address) {
+          if (symbol && (t.fromUserAccount === address || t.toUserAccount === address)) {
             const isOut = t.fromUserAccount === address
             const other = isOut ? t.toUserAccount : t.fromUserAccount
             const amount = t.tokenAmount
+            if (amount < 1) continue // Skip < 1 token
 
-            if (!nodesMap.has(other)) {
-              nodesMap.set(other, { id: other, data: { label: `${other.slice(0,4)}...${other.slice(-4)}` }, position: { x: xOff, y: yOff }, style: { backgroundColor: '#1f2937', color: '#fff' } })
-              xOff += 150
-              if (xOff > 800) { xOff = 100; yOff += 100 }
-            }
-
-            const edgeId = `${t.fromUserAccount}-${t.toUserAccount}-${symbol}`
-            edgesMap.set(edgeId, {
-              id: edgeId,
-              source: t.fromUserAccount,
-              target: t.toUserAccount,
-              label: `${amount} ${symbol}`,
-              animated: true,
-              style: { stroke: symbol === 'USDC' ? '#3b82f6' : symbol === 'USDT' ? '#22c55e' : '#a855f7' }
-            })
+            const current = volumeMap.get(other) || { volume: 0, isOut, symbol }
+            current.volume += amount
+            volumeMap.set(other, current)
           }
         }
       }
     }
+
+    // Sort wallets by volume descending
+    const sortedWallets = Array.from(volumeMap.entries()).sort((a, b) => b[1].volume - a[1].volume)
+    
+    // Add root node
+    const rootX = 0
+    const rootY = 0
+    nodesMap.set(address, { 
+      id: address, 
+      type: 'bubble',
+      data: { label: address, isRoot: true, volume: sortedWallets.reduce((acc, curr) => acc + curr[1].volume, 0) }, 
+      position: { x: rootX, y: rootY }
+    })
+
+    // Orbit Layout
+    let currentOrbit = 1
+    let itemsInCurrentOrbit = 0
+    let maxItemsInOrbit = 8
+
+    sortedWallets.forEach(([other, data], index) => {
+      // Calculate position
+      if (itemsInCurrentOrbit >= maxItemsInOrbit) {
+        currentOrbit++
+        itemsInCurrentOrbit = 0
+        maxItemsInOrbit = Math.floor(maxItemsInOrbit * 1.5) // Outer orbits can hold more
+      }
+
+      const radius = currentOrbit * 200
+      const angle = (itemsInCurrentOrbit / maxItemsInOrbit) * Math.PI * 2
+      const x = rootX + radius * Math.cos(angle)
+      const y = rootY + radius * Math.sin(angle)
+      
+      nodesMap.set(other, { 
+        id: other, 
+        type: 'bubble',
+        data: { label: other, isRoot: false, volume: data.volume }, 
+        position: { x, y }
+      })
+
+      // Create aggregated edge
+      const edgeId = `${address}-${other}-${data.symbol}`
+      edgesMap.set(edgeId, {
+        id: edgeId,
+        source: data.isOut ? address : other,
+        target: data.isOut ? other : address,
+        label: `${data.volume.toFixed(2)} ${data.symbol}`,
+        animated: false, // Turn off animation to fix lag
+        style: { stroke: data.symbol === 'USDC' ? '#3b82f6' : data.symbol === 'USDT' ? '#22c55e' : '#a855f7', strokeDasharray: '5 5' }
+      })
+
+      itemsInCurrentOrbit++
+    })
 
     return NextResponse.json({
       nodes: Array.from(nodesMap.values()),
