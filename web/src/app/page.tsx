@@ -21,6 +21,27 @@ export default function App() {
   const [nodes, setNodes, onNodesChange] = useNodesState([{ id: '1', position: { x: 250, y: 200 }, data: { label: 'Chưa có dữ liệu quét' } }])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
   
+  const [showAddModal, setShowAddModal] = useState(false)
+  const [newWallet, setNewWallet] = useState({ address: '', name: '', min_sol: 0.1, max_sol: 100 })
+
+  const handleAddWallet = async () => {
+    if (!newWallet.address || !wallets) return
+    const updated = [...wallets, { ...newWallet, is_active: true, alert_in: true, alert_out: true, auto_add_min: null, auto_add_max: null, auto_add_list: null, auto_add_name: null }]
+    mutateWallets(updated, false)
+    await fetch('/api/wallets', { method: 'POST', body: JSON.stringify(updated) })
+    mutateWallets()
+    setShowAddModal(false)
+    setNewWallet({ address: '', name: '', min_sol: 0.1, max_sol: 100 })
+  }
+
+  const handleRemoveWallet = async (addr: string) => {
+    if (!wallets) return
+    const updated = wallets.filter((w: any) => w.address !== addr)
+    mutateWallets(updated, false)
+    await fetch('/api/wallets', { method: 'POST', body: JSON.stringify(updated) })
+    mutateWallets()
+  }
+  
   const toggleCombatMode = async () => {
     if (!botState) return
     const newState = { ...botState, combat_mode: !botState.combat_mode }
@@ -133,7 +154,7 @@ export default function App() {
             <div>
               <div className="flex items-center justify-between mb-4">
                 <h2 className="text-lg font-semibold text-white">Danh sách Ví theo dõi</h2>
-                <button className="bg-cyan-500 hover:bg-cyan-600 text-black font-semibold px-4 py-2 rounded-lg text-sm transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)]">
+                <button onClick={() => setShowAddModal(true)} className="bg-cyan-500 hover:bg-cyan-600 text-black font-semibold px-4 py-2 rounded-lg text-sm transition-colors shadow-[0_0_15px_rgba(6,182,212,0.3)] hover:shadow-[0_0_20px_rgba(6,182,212,0.5)]">
                   + Thêm Ví Mới
                 </button>
               </div>
@@ -152,15 +173,35 @@ export default function App() {
                       </div>
                       <div className="text-right">
                         <div className="text-sm text-gray-400">Min: {w.min_sol} - Max: {w.max_sol} SOL</div>
-                        <div className="text-xs text-cyan-500/70 mt-1">
+                        <div className="text-xs text-cyan-500/70 mt-1 mb-2">
                           Auto-Add: {w.auto_add_name ? 'Bật' : 'Tắt'}
                         </div>
+                        <button onClick={() => handleRemoveWallet(w.address)} className="text-xs text-red-500 hover:text-red-400 font-semibold px-2 py-1 bg-red-500/10 rounded">Xóa Ví</button>
                       </div>
                     </div>
                   ))
                 )}
               </div>
+              </div>
             </div>
+
+            {showAddModal && (
+              <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
+                <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl">
+                  <h3 className="text-xl font-bold text-white">Thêm Ví Mới</h3>
+                  <input type="text" placeholder="Địa chỉ ví (Address)" className="w-full bg-gray-800 text-white p-2 rounded-lg outline-none focus:ring-1 focus:ring-cyan-500" value={newWallet.address} onChange={e => setNewWallet({...newWallet, address: e.target.value})} />
+                  <input type="text" placeholder="Tên gợi nhớ" className="w-full bg-gray-800 text-white p-2 rounded-lg outline-none focus:ring-1 focus:ring-cyan-500" value={newWallet.name} onChange={e => setNewWallet({...newWallet, name: e.target.value})} />
+                  <div className="flex space-x-2">
+                    <input type="number" placeholder="Min SOL" className="w-full bg-gray-800 text-white p-2 rounded-lg outline-none focus:ring-1 focus:ring-cyan-500" value={newWallet.min_sol} onChange={e => setNewWallet({...newWallet, min_sol: Number(e.target.value)})} />
+                    <input type="number" placeholder="Max SOL" className="w-full bg-gray-800 text-white p-2 rounded-lg outline-none focus:ring-1 focus:ring-cyan-500" value={newWallet.max_sol} onChange={e => setNewWallet({...newWallet, max_sol: Number(e.target.value)})} />
+                  </div>
+                  <div className="flex justify-end space-x-2 pt-4">
+                    <button onClick={() => setShowAddModal(false)} className="px-4 py-2 text-gray-400 hover:text-white transition-colors">Hủy</button>
+                    <button onClick={handleAddWallet} className="px-4 py-2 bg-cyan-500 text-black font-semibold rounded-lg hover:bg-cyan-600 transition-colors">Lưu Ví</button>
+                  </div>
+                </div>
+              </div>
+            )}
             
           </div>
         )}
@@ -187,6 +228,12 @@ export default function App() {
                   {isLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <span>Quét</span>}
                 </button>
               </div>
+
+              {errorMsg && (
+                <div className="bg-red-500/20 text-red-400 text-sm px-4 py-2 rounded-lg border border-red-500/50 w-full text-center">
+                  ⚠️ {errorMsg}
+                </div>
+              )}
               
               {/* Token Filters */}
               <div className="flex items-center space-x-4 bg-gray-900/80 backdrop-blur-md px-4 py-1.5 rounded-full border border-gray-800 text-sm mt-2">
