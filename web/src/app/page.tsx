@@ -220,8 +220,8 @@ export default function App() {
             </div>
 
             {showAddModal && (
-              <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50">
-                <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl">
+              <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50" onClick={() => setShowAddModal(false)}>
+                <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-md space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
                   <h3 className="text-xl font-bold text-white">Thêm Ví Mới</h3>
                   <input type="text" placeholder="Địa chỉ ví (Address)" className="w-full bg-gray-800 text-white p-2 rounded-lg outline-none focus:ring-1 focus:ring-cyan-500" value={newWallet.address} onChange={e => setNewWallet({...newWallet, address: e.target.value})} />
                   <input type="text" placeholder="Tên gợi nhớ" className="w-full bg-gray-800 text-white p-2 rounded-lg outline-none focus:ring-1 focus:ring-cyan-500" value={newWallet.name} onChange={e => setNewWallet({...newWallet, name: e.target.value})} />
@@ -238,8 +238,8 @@ export default function App() {
             )}
 
             {showEditModal && editWallet && (
-              <div className="fixed inset-0 bg-black/80 overflow-y-auto flex items-center justify-center z-50 py-10">
-                <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-lg space-y-4 shadow-2xl">
+              <div className="fixed inset-0 bg-black/80 overflow-y-auto flex items-center justify-center z-50 py-10" onClick={() => setShowEditModal(false)}>
+                <div className="bg-gray-900 border border-gray-800 p-6 rounded-2xl w-full max-w-lg space-y-4 shadow-2xl" onClick={e => e.stopPropagation()}>
                   <h3 className="text-xl font-bold text-white border-b border-gray-800 pb-2">Cài đặt: {editWallet.name}</h3>
                   
                   <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-2 custom-scrollbar">
