@@ -168,14 +168,22 @@ def get_alarm_state():
     try:
         with open(ALARM_STATE_FILE, 'r', encoding='utf-8') as f:
             data = json.load(f)
-            # Migration from Multi-user (dict) to Single-user (object)
-            if isinstance(data, dict) and any(isinstance(v, dict) for v in data.values()):
-                # Take the first active state or default
-                admin_id = os.getenv('TELEGRAM_CHAT_ID')
-                state = data.get(admin_id, list(data.values())[0] if data else {'is_active': False})
-                with open(ALARM_STATE_FILE, 'w', encoding='utf-8') as wf:
-                    json.dump(state, wf)
-                return state
+            
+            # If data is a boolean or somehow corrupted, return default
+            if not isinstance(data, dict):
+                return {'is_active': False, 'current_tx': None}
+                
+            # If it looks like the old multi-user format (where keys are chat_ids, which are numeric strings)
+            # and it doesn't have 'is_active' at the root
+            if 'is_active' not in data:
+                # Find the first valid state
+                for k, v in data.items():
+                    if isinstance(v, dict) and 'is_active' in v:
+                        state = v
+                        with open(ALARM_STATE_FILE, 'w', encoding='utf-8') as wf:
+                            json.dump(state, wf, indent=4)
+                        return state
+                return {'is_active': False, 'current_tx': None}
                 
             return data
     except (FileNotFoundError, json.JSONDecodeError):
