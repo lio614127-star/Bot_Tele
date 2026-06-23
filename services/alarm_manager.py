@@ -21,6 +21,9 @@ def alarm_worker_loop():
     interval = int(os.getenv('ALARM_INTERVAL', 1))
     max_duration = int(os.getenv('MAX_ALARM_DURATION', 1200))
     
+    spam_count = 0
+    last_tx_signature = None
+    
     while True:
         state = get_alarm_state()
         
@@ -31,53 +34,31 @@ def alarm_worker_loop():
             if elapsed > max_duration:
                 logger.info("Alarm duration exceeded. Auto-stopping.")
                 set_alarm_state(False)
-                send_message("ℹ️ **Báo động đã tự động dừng** (hết thời gian tối đa).")
             else:
-                # Trigger actual sound/notification
                 tx = state.get('current_tx', {})
                 name = tx.get('wallet_name', 'N/A')
                 addr = tx.get('wallet_addr', 'N/A')
-                direction = tx.get('direction', 'OUT')
-                amount = tx.get('amount', 0) / 1_000_000_000.0
+                signature = tx.get('signature', '')
                 
-                logger.info(f"ALARM ACTIVE: {name} ({addr})")
+                if signature != last_tx_signature:
+                    spam_count = 0
+                    last_tx_signature = signature
+                    
+                spam_count += 1
+                from datetime import datetime
+                now_ms = datetime.now().strftime("%H:%M:%S.%f")[:-3]
                 
-                ntfy_topic = os.getenv('NTFY_TOPIC')
-                if ntfy_topic:
-                    try:
-                        payload_text = f"[{name}] vừa có giao dịch {direction} số lượng {amount:.4f} SOL. Mở Telegram để xem chi tiết và tắt báo động!"
-                        requests.post(f"https://ntfy.sh/{ntfy_topic}",
-                            data=payload_text.encode('utf-8'),
-                            headers={
-                                "Title": "BÁO ĐỘNG GIAO DỊCH!".encode('utf-8'),
-                                "Priority": "5",
-                                "Tags": "rotating_light,warning"
-                            },
-                            timeout=5
-                        )
-                    except Exception as e:
-                        logger.error(f"Lỗi khi gửi ntfy: {e}")
-                        # Fallback to Telegram if ntfy fails
-                        reply_markup = {
-                            "inline_keyboard": [[
-                                {"text": "🛑 Dừng báo động", "callback_data": "stop_alarm"}
-                            ]]
-                        }
-                        msg_id = send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>\n<i>(Lỗi ntfy: không gửi được push)</i>", reply_markup=reply_markup)
-                        from utils.persistence import add_spam_message_id
-                        if isinstance(msg_id, int):
-                            add_spam_message_id(msg_id)
-                else:
-                    # Fallback if no ntfy topic is set
-                    reply_markup = {
-                        "inline_keyboard": [[
-                            {"text": "🛑 Dừng báo động", "callback_data": "stop_alarm"}
-                        ]]
-                    }
-                    msg_id = send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>", reply_markup=reply_markup)
-                    from utils.persistence import add_spam_message_id
-                    if isinstance(msg_id, int):
-                        add_spam_message_id(msg_id)
+                reply_markup = {
+                    "inline_keyboard": [[
+                        {"text": "🛑 Dừng báo động", "callback_data": "stop_alarm"}
+                    ]]
+                }
+                msg_text = f"🚨 <b>BÁO ĐỘNG LIÊN TỤC ({spam_count})</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>\n⏰ <code>{now_ms}</code>"
+                
+                msg_id = send_message(msg_text, reply_markup=reply_markup)
+                from utils.persistence import add_spam_message_id
+                if isinstance(msg_id, int):
+                    add_spam_message_id(msg_id)
         
         time.sleep(interval)
 
