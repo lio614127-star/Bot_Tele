@@ -270,7 +270,7 @@ def handle_webhook(payload):
             send_message("📝 <b>Xóa ví</b>\nVui lòng gửi địa chỉ ví cần xóa:", reply_markup=reply_markup)
 
     elif callback_query:
-        chat_id = str(callback_query.get('from', {}).get('id'))
+        chat_id = str(callback_query.get('message', {}).get('chat', {}).get('id'))
         if chat_id != admin_id: return
         
         data = callback_query.get('data')
@@ -283,30 +283,39 @@ def handle_webhook(payload):
             
         if data == 'stop_alarm':
             state = get_alarm_state()
-            spam_ids = state.get('spam_message_ids', [])
+            spam_ids = list(state.get('spam_message_ids', []))
             tx = state.get('current_tx', {})
             first_msg_id = tx.get('first_message_id')
             
+            # Dọn dẹp trạng thái ngay lập tức
             set_alarm_state(False)
+            state['spam_message_ids'] = []
+            with open('data/alarm_state.json', 'w', encoding='utf-8') as f:
+                json.dump(state, f, indent=4)
             
+            # Trả lời nhanh để tắt hiệu ứng loading của nút bấm
+            answer("✅ Đã dừng và đang dọn dẹp tin nhắn!")
+            
+            # Xóa tin nhắn ngầm để không bị timeout
             bot_token = os.getenv('TELEGRAM_BOT_TOKEN')
-            # Delete spam messages
-            for spam_id in spam_ids:
-                try:
-                    del_url = f"{TELEGRAM_API_URL}{bot_token}/deleteMessage"
-                    requests.post(del_url, json={"chat_id": chat_id, "message_id": spam_id}, timeout=5)
-                except Exception as e:
-                    logger.error(f"Failed to delete spam message: {e}")
+            def delete_worker(spam_list, first_id, c_id, token):
+                import requests
+                for spam_id in spam_list:
+                    try:
+                        del_url = f"{TELEGRAM_API_URL}{token}/deleteMessage"
+                        requests.post(del_url, json={"chat_id": c_id, "message_id": spam_id}, timeout=5)
+                    except:
+                        pass
+                
+                if first_id:
+                    try:
+                        edit_url = f"{TELEGRAM_API_URL}{token}/editMessageReplyMarkup"
+                        requests.post(edit_url, json={"chat_id": c_id, "message_id": first_id}, timeout=5)
+                    except:
+                        pass
             
-            # Remove inline keyboard from the first message
-            if first_msg_id:
-                try:
-                    edit_url = f"{TELEGRAM_API_URL}{bot_token}/editMessageReplyMarkup"
-                    requests.post(edit_url, json={"chat_id": chat_id, "message_id": first_msg_id}, timeout=5)
-                except:
-                    pass
-                    
-            answer("Đã dừng và dọn dẹp tin nhắn!")
+            import threading
+            threading.Thread(target=delete_worker, args=(spam_ids, first_msg_id, chat_id, bot_token), daemon=True).start()
             
         elif data == 'cancel_action':
             set_user_state(chat_id, None)

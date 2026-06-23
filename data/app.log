@@ -16,3 +16,4 @@
 2026-04-09 02:22:19,868 - CryptoAlarmBot - INFO - Detected outgoing transfer of 1.0 SOL from Address1111111111111111111111111111111111111 to Recipient
 2026-04-09 02:22:19,868 - CryptoAlarmBot - INFO - MATCH FOUND: Signature=sig1, Amount=1.0 SOL. Details: {'fromUser': 'Address1111111111111111111111111111111111111', 'toUser': 'Recipient', 'amount': 1000000000, 'wallet_name': 'Address1111111111111111111111111111111111111'}
 2026-04-09 02:24:58,525 - CryptoAlarmBot - CRITICAL - UNABLE TO START: Missing mandatory environment variables: TELEGRAM_BOT_TOKEN, TELEGRAM_CHAT_ID, SECRET_TOKEN, TELEGRAM_SECRET, TARGET_WALLET, ALARM_INTERVAL, MAX_ALARM_DURATION
+2026-06-23 10:20:48,189 - CryptoAlarmBot - ERROR - Failed to send Telegram message: 401 Client Error: Unauthorized for url: https://api.telegram.org/bot7774771960:AAGaBfE613OaT-yM5H30W1U9Gz2pZ7gD8Yg/sendMessage
