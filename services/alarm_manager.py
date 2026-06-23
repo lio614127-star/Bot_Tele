@@ -18,7 +18,7 @@ def alarm_worker_loop():
     """
     logger.info("Alarm worker loop started (Single-User).")
     
-    interval = int(os.getenv('ALARM_INTERVAL', 10))
+    interval = int(os.getenv('ALARM_INTERVAL', 1))
     max_duration = int(os.getenv('MAX_ALARM_DURATION', 1200))
     
     while True:
