@@ -45,8 +45,9 @@ def alarm_worker_loop():
                 ntfy_topic = os.getenv('NTFY_TOPIC')
                 if ntfy_topic:
                     try:
+                        payload_text = f"Ví {name} vừa có giao dịch {direction} số lượng {amount:.4f} SOL. Mở Telegram để xem chi tiết và tắt báo động!"
                         requests.post(f"https://ntfy.sh/{ntfy_topic}",
-                            data=f"Ví {name} vừa có giao dịch {direction} số lượng {amount:.4f} SOL. Mở Telegram để xem chi tiết và tắt báo động!",
+                            data=payload_text.encode('utf-8'),
                             headers={
                                 "Title": "BÁO ĐỘNG GIAO DỊCH!",
                                 "Priority": "5",
@@ -56,6 +57,8 @@ def alarm_worker_loop():
                         )
                     except Exception as e:
                         logger.error(f"Lỗi khi gửi ntfy: {e}")
+                        # Fallback to Telegram if ntfy fails
+                        send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>\n<i>(Lỗi ntfy: không gửi được push)</i>")
                 else:
                     # Fallback if no ntfy topic is set
                     send_message(f"🔔 <b>ĐANG CÓ BIẾN!</b>\nVí: <b>{name}</b>\nĐịa chỉ: <code>{addr}</code>")
