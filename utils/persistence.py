@@ -20,7 +20,7 @@ def ensure_data_files():
                 if 'wallets' in file_path:
                     json.dump([], f)
                 elif 'alarm_state' in file_path:
-                    json.dump({'is_active': False, 'current_tx': None}, f)
+                    json.dump({'is_active': False, 'current_tx': None, 'bot_paused': False}, f)
                 elif 'user_states' in file_path:
                     json.dump({}, f)
                 else:
@@ -203,7 +203,7 @@ def get_alarm_state():
             
             # If data is a boolean or somehow corrupted, return default
             if not isinstance(data, dict):
-                return {'is_active': False, 'current_tx': None}
+                return {'is_active': False, 'current_tx': None, 'bot_paused': False}
                 
             # If it looks like the old multi-user format (where keys are chat_ids, which are numeric strings)
             # and it doesn't have 'is_active' at the root
@@ -215,11 +215,13 @@ def get_alarm_state():
                         with open(ALARM_STATE_FILE, 'w', encoding='utf-8') as wf:
                             json.dump(state, wf, indent=4)
                         return state
-                return {'is_active': False, 'current_tx': None}
+                return {'is_active': False, 'current_tx': None, 'bot_paused': False}
                 
+            if 'bot_paused' not in data:
+                data['bot_paused'] = False
             return data
     except (FileNotFoundError, json.JSONDecodeError):
-        return {'is_active': False, 'current_tx': None}
+        return {'is_active': False, 'current_tx': None, 'bot_paused': False}
 
 def set_alarm_state(is_active, current_tx=None):
     """Set global alarm state."""
@@ -233,6 +235,15 @@ def set_alarm_state(is_active, current_tx=None):
         
     with open(ALARM_STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=4)
+
+def toggle_bot_pause():
+    """Toggles the global pause state of the bot."""
+    state = get_alarm_state()
+    current = state.get('bot_paused', False)
+    state['bot_paused'] = not current
+    with open(ALARM_STATE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(state, f, indent=4)
+    return state['bot_paused']
 
 def add_spam_message_id(msg_id):
     """Add a spam message ID to the list to be deleted later."""

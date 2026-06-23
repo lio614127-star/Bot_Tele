@@ -11,6 +11,12 @@ def process_helius_webhook(payload):
     """
     Processes Helius webhook for single-user, multi-wallet configuration.
     """
+    from utils.persistence import get_alarm_state
+    state = get_alarm_state()
+    if state.get('bot_paused', False):
+        logger.info("Bot is paused globally. Ignoring webhook.")
+        return False, None
+        
     wallets = load_wallets() # Flat list
     
     if not isinstance(payload, list):

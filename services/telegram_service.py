@@ -102,7 +102,17 @@ def is_valid_solana_address(address):
 
 def render_wallets_list():
     wallets = load_wallets()
-    msg = f"<b>Tổng số ví đang theo dõi: {len(wallets)} / 100000</b>\n"
+    
+    from utils.persistence import get_alarm_state
+    state = get_alarm_state()
+    bot_paused = state.get('bot_paused', False)
+    
+    if bot_paused:
+        msg = "<b>🔴 BOT ĐANG NGỦ (TẠM DỪNG TOÀN CỤC)</b>\n<i>(Bot sẽ không nhận bất kỳ thông báo nào)</i>\n\n"
+    else:
+        msg = "<b>🟢 BOT ĐANG HOẠT ĐỘNG BÌNH THƯỜNG</b>\n\n"
+        
+    msg += f"<b>Tổng số ví đang theo dõi: {len(wallets)} / 100000</b>\n"
     msg += "✅ - Ví đang hoạt động\n"
     msg += "⏸️ - Bạn đã tạm dừng ví này\n\n"
     
@@ -113,7 +123,12 @@ def render_wallets_list():
             icon = "✅" if w.get('is_active', True) else "⏸️"
             name = w.get('name', 'N/A')
             msg += f"{icon} /w_{i}\n<code>{w['address']}</code> ({name})\n"
-    return msg
+            
+    reply_markup = None
+    if bot_paused:
+        reply_markup = {"inline_keyboard": [[{"text": "🟢 Đánh thức Bot (Bật lại)", "callback_data": "toggle_power"}]]}
+        
+    return msg, reply_markup
 
 def render_wallet_detail(index):
     wallets = load_wallets()
@@ -266,8 +281,16 @@ def handle_webhook(payload):
             
         elif text == '/status':
             state = get_alarm_state()
+            bot_paused = state.get('bot_paused', False)
             is_active = state.get('is_active', False)
-            status_text = "🔔 <b>ĐANG BÁO ĐỘNG</b>" if is_active else "😴 <b>Đang theo dõi...</b>"
+            
+            if bot_paused:
+                status_text = "💤 <b>ĐANG NGỦ (Tạm dừng toàn cục)</b>"
+            elif is_active:
+                status_text = "🔔 <b>ĐANG BÁO ĐỘNG</b>"
+            else:
+                status_text = "😴 <b>Đang theo dõi...</b>"
+                
             wallets = load_wallets()
             
             msg = f"📊 <b>Trạng thái:</b> {status_text}\n"
@@ -276,10 +299,14 @@ def handle_webhook(payload):
             if is_active and state.get('current_tx'):
                 tx = state.get('current_tx')
                 msg += f"\n\n🔥 <b>Ví kích hoạt:</b>\n<b>{tx.get('wallet_name', 'N/A')}</b>\n<code>{tx.get('wallet_addr', 'N/A')}</code>"
-            send_message(msg)
+                
+            power_text = "🟢 Đánh thức Bot (Bật)" if bot_paused else "🔴 Tắt Bot (Đi ngủ)"
+            reply_markup = {"inline_keyboard": [[{"text": power_text, "callback_data": "toggle_power"}]]}
+            send_message(msg, reply_markup=reply_markup)
             
         elif text == '/list' or text == '/wallets':
-            send_message(render_wallets_list())
+            msg, reply_markup = render_wallets_list()
+            send_message(msg, reply_markup=reply_markup)
             
         elif text.startswith('/w_'):
             match = re.match(r'/w_(\d+)', text)
@@ -354,9 +381,47 @@ def handle_webhook(payload):
             edit_message(message_id, "❌ <i>Đã hủy thao tác.</i>")
             answer()
             
+        elif data == 'toggle_power':
+            from utils.persistence import toggle_bot_pause
+            is_paused = toggle_bot_pause()
+            
+            if is_paused:
+                answer("🔴 Đã TẮT bot. Hệ thống sẽ bỏ qua mọi giao dịch.")
+            else:
+                answer("🟢 Đã BẬT bot. Hệ thống bắt đầu theo dõi trở lại.")
+                
+            # Cập nhật lại màn hình status nếu đang ở màn hình status
+            state = get_alarm_state()
+            bot_paused = state.get('bot_paused', False)
+            is_active = state.get('is_active', False)
+            
+            if bot_paused:
+                status_text = "💤 <b>ĐANG NGỦ (Tạm dừng toàn cục)</b>"
+            elif is_active:
+                status_text = "🔔 <b>ĐANG BÁO ĐỘNG</b>"
+            else:
+                status_text = "😴 <b>Đang theo dõi...</b>"
+                
+            wallets = load_wallets()
+            msg = f"📊 <b>Trạng thái:</b> {status_text}\n"
+            msg += f"👥 <b>Số ví đang theo dõi:</b> {len(wallets)}"
+            
+            if is_active and state.get('current_tx'):
+                tx = state.get('current_tx')
+                msg += f"\n\n🔥 <b>Ví kích hoạt:</b>\n<b>{tx.get('wallet_name', 'N/A')}</b>\n<code>{tx.get('wallet_addr', 'N/A')}</code>"
+                
+            power_text = "🟢 Đánh thức Bot (Bật)" if bot_paused else "🔴 Tắt Bot (Đi ngủ)"
+            reply_markup = {"inline_keyboard": [[{"text": power_text, "callback_data": "toggle_power"}]]}
+            
+            try:
+                edit_message(message_id, msg, reply_markup)
+            except:
+                pass
+                
         elif data == 'back_to_wallets':
             set_user_state(chat_id, None)
-            edit_message(message_id, render_wallets_list())
+            msg, reply_markup = render_wallets_list()
+            edit_message(message_id, msg, reply_markup)
             answer()
             
         elif data.startswith('delete_'):
@@ -365,7 +430,8 @@ def handle_webhook(payload):
                 sync_wallets_to_helius()
                 edit_message(message_id, "🗑️ <i>Đã xóa ví thành công!</i>")
                 # Gửi lại list
-                send_message(render_wallets_list())
+                msg, reply_markup = render_wallets_list()
+                send_message(msg, reply_markup=reply_markup)
             else:
                 edit_message(message_id, "❌ Lỗi: Không tìm thấy ví.")
             answer()
