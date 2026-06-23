@@ -18,8 +18,11 @@ export async function POST(req: Request) {
       const text = message.text || ''
       
       if (text.startsWith('/start') || text.startsWith('/web')) {
-        const webUrl = process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000'
-        await sendMessage(chatId, `🚀 <b>Mạng Nhện Tracer Đã Kết Nối!</b>\n\nToàn bộ hệ thống quản lý ví đã được chuyển lên Web App để sếp theo dõi trực quan và dễ dàng hơn.\n\n👉 <b><a href="${webUrl}">Bấm vào đây để mở Web App</a></b>\n\nCác lệnh khả dụng:\n/status - Xem trạng thái\n/stop - Dừng báo động`)
+        const webUrl = 'https://bot-tele-eosin.vercel.app' // Hardcode for reliability
+        await sendMessage(chatId, `🚀 <b>Mạng Nhện Tracer Đã Kết Nối!</b>\n\nToàn bộ hệ thống quản lý ví đã được tự động hóa và chuyển lên Web App để sếp dễ dàng thao tác (Bản đồ Bubblemaps, Lọc nâng cao, ...).\n\n👉 <b><a href="${webUrl}">BẤM VÀO ĐÂY ĐỂ MỞ WEB APP</a></b>\n\nCác lệnh khả dụng:\n/status - Xem trạng thái\n/stop - Dừng báo động\n/web - Mở Web App`)
+      } else if (text.startsWith('/add') || text.startsWith('/wallets') || text.startsWith('/remove') || (!text.startsWith('/') && text.length > 30)) {
+        // Redirect old commands and raw addresses to Web App
+        await sendMessage(chatId, `⚠️ <b>Tính năng này đã được chuyển nhà!</b>\n\nSếp ơi, để tối ưu tốc độ và giúp sếp nhìn trực quan hơn (bằng bản đồ mạng nhện Bubblemaps), toàn bộ tính năng Thêm/Xóa/Quản lý ví đã được dời lên Web App.\n\nSếp gõ lệnh /web hoặc bấm vào nút Menu để vào Web App nhé!`)
       }
       
       if (text === '/stop') {
