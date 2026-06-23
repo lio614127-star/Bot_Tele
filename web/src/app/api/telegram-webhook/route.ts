@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getBotState, saveBotState, getWallets, saveWallets } from '@/lib/kv'
+import { getBotState, saveBotState, getWallets, saveWallets, getUserState, setUserState } from '@/lib/kv'
 import { sendMessage, editMessage, answerCallbackQuery } from '@/lib/telegram'
 
 export async function POST(req: Request) {
@@ -16,30 +16,44 @@ export async function POST(req: Request) {
       if (chatId !== adminId) return NextResponse.json({ ok: true }) // Ignore unauthorized
         
       const text = message.text || ''
+      const userState = await getUserState(chatId)
       
       if (text.startsWith('/start') || text.startsWith('/web')) {
+        await setUserState(chatId, null)
         const webUrl = 'https://bot-tele-eosin.vercel.app' // Hardcode for reliability
         await sendMessage(chatId, `🚀 <b>Mạng Nhện Tracer Đã Kết Nối!</b>\n\nToàn bộ hệ thống quản lý ví đã được tự động hóa và chuyển lên Web App để sếp dễ dàng thao tác (Bản đồ Bubblemaps, Lọc nâng cao, ...).\n\n👉 <b><a href="${webUrl}">BẤM VÀO ĐÂY ĐỂ MỞ WEB APP</a></b>\n\nCác lệnh khả dụng:\n/status - Xem trạng thái\n/wallets - Quản lý ví\n/stop - Dừng báo động\n/web - Mở Web App`)
       }
       
-      if (text.startsWith('/add')) {
+      if (text === '/add') {
+        await setUserState(chatId, 'WAITING_FOR_ADDRESS')
+        await sendMessage(chatId, "👉 Vui lòng nhập địa chỉ ví:")
+      } else if (text.startsWith('/add ')) {
         const parts = text.split(' ')
-        if (parts.length < 2) {
-          await sendMessage(chatId, "❌ Sai cú pháp! Vui lòng dùng: <code>/add [địa chỉ ví] [tên ví]</code>")
+        const address = parts[1]
+        const name = parts.slice(2).join(' ') || 'Ví mới'
+        const wallets = await getWallets()
+        if (wallets.some(w => w.address === address)) {
+          await sendMessage(chatId, `⚠️ Ví <b>${address.slice(0,4)}...${address.slice(-4)}</b> đã tồn tại trong hệ thống!`)
         } else {
-          const address = parts[1]
-          const name = parts.slice(2).join(' ') || 'Ví mới'
-          const wallets = await getWallets()
-          if (wallets.some(w => w.address === address)) {
-            await sendMessage(chatId, `⚠️ Ví <b>${address.slice(0,4)}...${address.slice(-4)}</b> đã tồn tại trong hệ thống!`)
-          } else {
-            wallets.push({ address, name, min_sol: 0, max_sol: 0, is_active: true, alert_in: true, alert_out: true, auto_add_min: null, auto_add_max: null, auto_add_list: null, auto_add_name: null })
-            await saveWallets(wallets)
-            await sendMessage(chatId, `✅ <b>Đã thêm ví thành công!</b>\n\nTên: ${name}\nĐịa chỉ: <code>${address}</code>\n\nDùng lệnh /wallets để quản lý hoặc mở Web App.`)
-          }
+          wallets.push({ address, name, min_sol: 0, max_sol: 0, is_active: true, alert_in: true, alert_out: true, auto_add_min: null, auto_add_max: null, auto_add_list: null, auto_add_name: null })
+          await saveWallets(wallets)
+          await sendMessage(chatId, `✅ <b>Đã thêm ví thành công!</b>\n\nTên: ${name}\nĐịa chỉ: <code>${address}</code>\n\nDùng lệnh /wallets để quản lý hoặc mở Web App.`)
         }
+      } else if (userState === 'WAITING_FOR_ADDRESS' && !text.startsWith('/')) {
+        const parts = text.split(' ')
+        const address = parts[0]
+        const name = parts.slice(1).join(' ') || 'Ví mới'
+        const wallets = await getWallets()
+        if (wallets.some(w => w.address === address)) {
+          await sendMessage(chatId, `⚠️ Ví <b>${address.slice(0,4)}...${address.slice(-4)}</b> đã tồn tại trong hệ thống!`)
+        } else {
+          wallets.push({ address, name, min_sol: 0, max_sol: 0, is_active: true, alert_in: true, alert_out: true, auto_add_min: null, auto_add_max: null, auto_add_list: null, auto_add_name: null })
+          await saveWallets(wallets)
+          await sendMessage(chatId, `✅ <b>Đã thêm ví thành công!</b>\n\nTên: ${name}\nĐịa chỉ: <code>${address}</code>\n\nDùng lệnh /wallets để xem danh sách.`)
+        }
+        await setUserState(chatId, null)
       } else if (!text.startsWith('/') && text.length >= 32 && text.length <= 44 && /^[1-9A-HJ-NP-Za-km-z]+$/.test(text)) {
-        // Direct address paste
+        // Direct address paste outside of WAITING_FOR_ADDRESS state
         const address = text
         const name = 'Ví mới'
         const wallets = await getWallets()
