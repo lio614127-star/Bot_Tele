@@ -58,7 +58,6 @@ export default function App() {
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   
   const [showAddModal, setShowAddModal] = useState(false)
-  const [showEditModal, setShowEditModal] = useState(false)
   const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
   const [advancedFilters, setAdvancedFilters] = useState({
     startDate: '',
