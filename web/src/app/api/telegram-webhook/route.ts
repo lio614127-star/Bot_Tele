@@ -25,7 +25,7 @@ export async function POST(req: Request) {
       if (text.startsWith('/add')) {
         const parts = text.split(' ')
         if (parts.length < 2) {
-          await sendMessage(chatId, "❌ Sai cú pháp! Vui lòng dùng: `/add <địa chỉ ví> <tên ví>`")
+          await sendMessage(chatId, "❌ Sai cú pháp! Vui lòng dùng: <code>/add [địa chỉ ví] [tên ví]</code>")
         } else {
           const address = parts[1]
           const name = parts.slice(2).join(' ') || 'Ví mới'
@@ -55,7 +55,7 @@ export async function POST(req: Request) {
       if (text === '/wallets') {
         const wallets = await getWallets()
         if (wallets.length === 0) {
-          await sendMessage(chatId, "📭 Danh sách ví trống! Gửi `/add <địa chỉ>` hoặc paste thẳng địa chỉ ví vào đây để thêm.")
+          await sendMessage(chatId, "📭 Danh sách ví trống! Gửi <code>/add [địa chỉ ví]</code> hoặc paste thẳng địa chỉ ví vào đây để thêm.")
         } else {
           await sendMessage(chatId, `📋 <b>Danh sách ví đang theo dõi (${wallets.length}):</b>`)
           for (let i = 0; i < wallets.length; i++) {
