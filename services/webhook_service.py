@@ -17,6 +17,21 @@ def process_helius_webhook(payload):
         logger.info("Bot is paused globally. Ignoring webhook.")
         return False, None
         
+    pause_start = state.get('pause_start_time')
+    pause_end = state.get('pause_end_time')
+    if pause_start and pause_end:
+        from datetime import datetime
+        now_str = datetime.now().strftime("%H:%M")
+        is_paused_schedule = False
+        if pause_start < pause_end:
+            is_paused_schedule = pause_start <= now_str <= pause_end
+        else:
+            is_paused_schedule = now_str >= pause_start or now_str <= pause_end
+            
+        if is_paused_schedule:
+            logger.info(f"Bot is scheduled paused ({pause_start} - {pause_end}). Ignoring webhook.")
+            return False, None
+            
     wallets = load_wallets() # Flat list
     
     if not isinstance(payload, list):
@@ -61,12 +76,51 @@ def process_helius_webhook(payload):
                         direction = "OUT (Gửi đi)" if is_out else "IN (Nhận về)"
                         logger.info(f"MATCH: {amount_sol} SOL {direction} - {wallet['name']} ({wallet['address']})")
                         
+                        trace_info = ""
+                        reply_markup = None
+                        
+                        if is_out and to_user:
+                            from services.rpc_service import get_wallet_info
+                            balance, is_new, creation_date = get_wallet_info(to_user)
+                            
+                            auto_add_amount = wallet.get('auto_add_amount')
+                            auto_add_name = wallet.get('auto_add_name')
+                            
+                            is_auto_added = False
+                            if is_new and auto_add_amount is not None and auto_add_name:
+                                if abs(amount_sol - auto_add_amount) <= 0.05:
+                                    new_name = f"{auto_add_name}_{to_user[:4]}"
+                                    from utils.persistence import add_wallet
+                                    success, note, new_idx = add_wallet(to_user, 0.0, 1000.0, new_name)
+                                    if success:
+                                        import threading
+                                        from services.helius_service import sync_wallets_to_helius
+                                        threading.Thread(target=sync_wallets_to_helius, daemon=True).start()
+                                        trace_info = f"\n\n🚨 <b>ĐÃ TỰ ĐỘNG BẮT VÍ CON MỚI!</b>\n👉 Thêm ví: <code>{to_user}</code>\n👉 Tên: {new_name}"
+                                        is_auto_added = True
+                            
+                            if not is_auto_added:
+                                trace_info = (
+                                    f"\n\n🔍 <b>Phân tích ví nhận:</b>\n"
+                                    f"👛 Địa chỉ: <code>{to_user}</code>\n"
+                                    f"💰 Số dư: {balance:.4f} SOL\n"
+                                    f"📅 Lần đầu h/động: {creation_date} {'(VÍ MỚI)' if is_new else '(Ví Cũ)'}"
+                                )
+                                reply_markup = {
+                                    "inline_keyboard": [
+                                        [{"text": f"➕ Thêm làm ví con", "callback_data": f"add_sub_{to_user[:40]}"}],
+                                        [{"text": "🛑 Dừng báo động", "callback_data": "stop_alarm"}]
+                                    ]
+                                }
+                        
                         msg_id = send_alarm_message(
                             amount_sol,
                             wallet['address'],
                             signature,
                             wallet_name=wallet['name'],
-                            direction=direction
+                            direction=direction,
+                            extra_text=trace_info,
+                            custom_markup=reply_markup
                         )
                         tx_data = {
                             'wallet_addr': wallet['address'],

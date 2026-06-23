@@ -8,7 +8,8 @@ from utils.logger import setup_logger
 from utils.persistence import (
     set_alarm_state, get_alarm_state, load_wallets, add_wallet, remove_wallet,
     get_user_state, set_user_state, toggle_wallet_state, delete_wallet_by_index,
-    update_wallet_min, update_wallet_max, toggle_alert_in, toggle_alert_out
+    update_wallet_min, update_wallet_max, toggle_alert_in, toggle_alert_out,
+    update_schedule, update_wallet_autoadd
 )
 from services.helius_service import sync_wallets_to_helius
 
@@ -76,22 +77,29 @@ def send_startup_message():
     )
     return send_message(text)
 
-def send_alarm_message(amount, wallet_addr, signature, wallet_name="N/A", direction="OUT (Gửi đi)"):
+def send_alarm_message(amount, wallet_addr, signature, wallet_name="N/A", direction="OUT (Gửi đi)", extra_text="", custom_markup=None):
     solscan_url = f"https://solscan.io/tx/{signature}"
     text = (
         f"🚨 <b>BÁO ĐỘNG! PHÁT HIỆN GIAO DỊCH</b>\n\n"
         f"🏷️ <b>Tên ví:</b> <b>{wallet_name}</b>\n"
         f"💰 <b>Số lượng:</b> {amount:.4f} SOL\n"
         f"🧭 <b>Hướng:</b> {direction}\n"
-        f"👛 <b>Địa chỉ:</b> <code>{wallet_addr}</code>\n\n"
-        f"🔗 <a href='{solscan_url}'>Xem trên Solscan</a>"
+        f"👛 <b>Địa chỉ:</b> <code>{wallet_addr}</code>\n"
     )
     
-    reply_markup = {
-        "inline_keyboard": [[
-            {"text": "🛑 Dừng báo động", "callback_data": "stop_alarm"}
-        ]]
-    }
+    if extra_text:
+        text += extra_text
+        
+    text += f"\n\n🔗 <a href='{solscan_url}'>Xem trên Solscan</a>"
+    
+    if custom_markup:
+        reply_markup = custom_markup
+    else:
+        reply_markup = {
+            "inline_keyboard": [[
+                {"text": "🛑 Dừng báo động", "callback_data": "stop_alarm"}
+            ]]
+        }
     return send_message(text, reply_markup=reply_markup)
 
 def is_valid_solana_address(address):
@@ -143,7 +151,14 @@ def render_wallet_detail(index):
     msg = f"💼 <b>Tên ví:</b> {w.get('name', 'N/A')}\n"
     msg += f"📍 <b>Địa chỉ:</b> <code>{w['address']}</code>\n"
     msg += f"📊 <b>Giới hạn:</b> {w['min_sol']} - {w['max_sol']} SOL\n"
-    msg += f"🟢 <b>Trạng thái:</b> {'Đang theo dõi (✅)' if is_active else 'Tạm dừng (⏸️)'}"
+    msg += f"🟢 <b>Trạng thái:</b> {'Đang theo dõi (✅)' if is_active else 'Tạm dừng (⏸️)'}\n"
+    
+    auto_amt = w.get('auto_add_amount')
+    auto_name = w.get('auto_add_name')
+    if auto_amt is not None and auto_name:
+        msg += f"🤖 <b>Auto-Add:</b> {auto_amt} SOL -> <code>{auto_name}</code>"
+    else:
+        msg += f"🤖 <b>Auto-Add:</b> Tắt"
     
     toggle_text = "⏸️ Tạm dừng" if is_active else "▶️ Tiếp tục"
     in_text = "✅ Nhận (IN)" if alert_in else "❌ Nhận (IN)"
@@ -155,6 +170,7 @@ def render_wallet_detail(index):
              {"text": f"📝 Max: {w['max_sol']}", "callback_data": f"edit_max_{index}"}],
             [{"text": in_text, "callback_data": f"toggle_in_{index}"}, 
              {"text": out_text, "callback_data": f"toggle_out_{index}"}],
+            [{"text": "🤖 Cài Auto-Add Ví Con", "callback_data": f"setup_autoadd_{index}"}],
             [{"text": toggle_text, "callback_data": f"toggle_{index}"}, 
              {"text": "🗑️ Xóa ví", "callback_data": f"delete_{index}"}],
             [{"text": "⬅️ Quay lại danh sách", "callback_data": "back_to_wallets"}]
@@ -263,6 +279,48 @@ def handle_webhook(payload):
                     send_message("❌ Lỗi định dạng số.")
                 set_user_state(chat_id, None)
                 return
+                
+            elif user_state.startswith('WAITING_AUTOADD_'):
+                index = int(user_state.split('_')[2])
+                if text.strip().lower() == 'off' or text.strip().lower() == 'tắt':
+                    update_wallet_autoadd(index, None, None)
+                    send_message("✅ Đã tắt tính năng Auto-Add cho ví này.")
+                else:
+                    parts = text.strip().split()
+                    if len(parts) >= 2:
+                        try:
+                            amt = float(parts[0])
+                            name = " ".join(parts[1:])
+                            update_wallet_autoadd(index, amt, name)
+                            send_message(f"✅ Đã cấu hình Auto-Add: Nếu ví đích mới nhận đúng ~{amt} SOL, sẽ tự động lưu với tên '{name}'.")
+                        except ValueError:
+                            send_message("❌ Định dạng số SOL không hợp lệ.")
+                    else:
+                        send_message("❌ Vui lòng nhập đúng cú pháp: `Số_SOL Tên_Ví`")
+                        
+                msg, reply_markup = render_wallet_detail(index)
+                send_message(msg, reply_markup)
+                set_user_state(chat_id, None)
+                return
+                
+            elif user_state == 'WAITING_SCHEDULE':
+                if text.strip().lower() == 'off' or text.strip().lower() == 'tắt':
+                    update_schedule(None, None)
+                    send_message("✅ Đã TẮT tính năng Hẹn giờ đi ngủ. Bot sẽ hoạt động 24/24.")
+                else:
+                    parts = text.strip().split()
+                    if len(parts) == 2:
+                        import re
+                        time_pattern = re.compile(r"^(0[0-9]|1[0-9]|2[0-3]):[0-5][0-9]$")
+                        if time_pattern.match(parts[0]) and time_pattern.match(parts[1]):
+                            update_schedule(parts[0], parts[1])
+                            send_message(f"✅ Đã lưu lịch trình ngủ: Từ {parts[0]} đến {parts[1]}.")
+                        else:
+                            send_message("❌ Định dạng giờ không hợp lệ. Phải là HH:MM.")
+                    else:
+                        send_message("❌ Cú pháp sai. Vui lòng nhập: `HH:MM HH:MM`")
+                set_user_state(chat_id, None)
+                return
 
         # Handle commands
         if text.startswith('/start'):
@@ -273,7 +331,8 @@ def handle_webhook(payload):
                 f"➕ /add - Thêm ví mới\n"
                 f"🗑️ /remove - Xóa ví bằng địa chỉ\n"
                 f"📊 /status - Trạng thái báo động\n"
-                f"🛑 /stop - Dừng báo động"
+                f"🛑 /stop - Dừng báo động\n"
+                f"⏰ /schedule - Cài đặt giờ đi ngủ (Bot tự tắt)"
             )
         elif text == '/stop':
             set_alarm_state(False)
@@ -302,6 +361,27 @@ def handle_webhook(payload):
                 
             power_text = "🟢 Đánh thức Bot (Bật)" if bot_paused else "🔴 Tắt Bot (Đi ngủ)"
             reply_markup = {"inline_keyboard": [[{"text": power_text, "callback_data": "toggle_power"}]]}
+            send_message(msg, reply_markup=reply_markup)
+            
+        elif text == '/schedule':
+            state = get_alarm_state()
+            pause_start = state.get('pause_start_time')
+            pause_end = state.get('pause_end_time')
+            
+            msg = "⏰ <b>CÀI ĐẶT LỊCH TRÌNH NGỦ (AUTO-PAUSE)</b>\n\n"
+            if pause_start and pause_end:
+                msg += f"💤 <b>Đang bật:</b> Bot sẽ tự ngủ từ <code>{pause_start}</code> đến <code>{pause_end}</code>.\n\n"
+            else:
+                msg += f"☀️ <b>Đang tắt:</b> Bot hoạt động 24/24.\n\n"
+                
+            msg += (
+                "👉 Để cài đặt, hãy nhập thời gian bắt đầu và kết thúc (Giờ 24h, định dạng HH:MM).\n"
+                "Ví dụ 1: <code>01:00 06:00</code>\n"
+                "Ví dụ 2: <code>23:30 07:00</code>\n\n"
+                "👉 Để tắt tính năng này, hãy nhắn: <code>off</code>"
+            )
+            set_user_state(chat_id, 'WAITING_SCHEDULE')
+            reply_markup = {"inline_keyboard": [[{"text": "❌ Hủy", "callback_data": "cancel_action"}]]}
             send_message(msg, reply_markup=reply_markup)
             
         elif text == '/list' or text == '/wallets':
@@ -478,4 +558,40 @@ def handle_webhook(payload):
             if success:
                 msg, reply_markup = render_wallet_detail(index)
                 edit_message(message_id, msg, reply_markup)
+            answer()
+            
+        elif data.startswith('setup_autoadd_'):
+            index = int(data.split('_')[2])
+            set_user_state(chat_id, f'WAITING_AUTOADD_{index}')
+            reply_markup = {"inline_keyboard": [[{"text": "⬅️ Hủy", "callback_data": "cancel_action"}]]}
+            send_message(
+                "🤖 <b>CÀI ĐẶT AUTO-ADD VÍ CON</b>\n\n"
+                "Gửi cho tôi <code>Số_SOL Tên_Ví</code>.\n\n"
+                "Ví dụ: Nếu Dev gửi ~2.1 SOL sang một ví MỚI HOÀN TOÀN, bạn muốn lưu nó là 'Ví_Phụ', hãy nhắn:\n"
+                "<code>2.1 Vi_Phu</code>\n\n"
+                "👉 Để TẮT tính năng này, nhắn: <code>off</code>", 
+                reply_markup=reply_markup
+            )
+            answer()
+            
+        elif data.startswith('add_sub_'):
+            address = data.split('_')[2]
+            name = f"Ví_con_{address[:4]}"
+            success, note, new_idx = add_wallet(address, 0.0, 1000.0, name)
+            if success:
+                sync_success, sync_note = sync_wallets_to_helius()
+                send_message(f"✅ Đã thêm ví con thành công!\n{note}")
+                # Hủy nút Thêm ví con trên tin nhắn cũ để tránh bấm 2 lần
+                try:
+                    import copy
+                    current_markup = callback_query.get('message', {}).get('reply_markup')
+                    if current_markup:
+                        new_markup = copy.deepcopy(current_markup)
+                        # Bỏ nút add_sub đi
+                        new_markup['inline_keyboard'] = [row for row in new_markup['inline_keyboard'] if not any(btn.get('callback_data', '').startswith('add_sub_') for btn in row)]
+                        edit_message(message_id, callback_query.get('message', {}).get('text'), new_markup)
+                except Exception as e:
+                    pass
+            else:
+                send_message(f"❌ Lỗi thêm ví: {note}")
             answer()

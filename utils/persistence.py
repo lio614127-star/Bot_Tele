@@ -20,7 +20,7 @@ def ensure_data_files():
                 if 'wallets' in file_path:
                     json.dump([], f)
                 elif 'alarm_state' in file_path:
-                    json.dump({'is_active': False, 'current_tx': None, 'bot_paused': False}, f)
+                    json.dump({'is_active': False, 'current_tx': None, 'bot_paused': False, 'pause_start_time': None, 'pause_end_time': None}, f)
                 elif 'user_states' in file_path:
                     json.dump({}, f)
                 else:
@@ -83,7 +83,7 @@ def load_wallets():
                 save_wallets(merged_wallets)
                 return merged_wallets
                 
-            # Ensure is_active, alert_in, alert_out exists for all existing flat wallets
+            # Ensure is_active, alert_in, alert_out, auto_add_amount, auto_add_name exists for all existing flat wallets
             updated = False
             for w in data:
                 if 'is_active' not in w:
@@ -94,6 +94,12 @@ def load_wallets():
                     updated = True
                 if 'alert_out' not in w:
                     w['alert_out'] = True
+                    updated = True
+                if 'auto_add_amount' not in w:
+                    w['auto_add_amount'] = None
+                    updated = True
+                if 'auto_add_name' not in w:
+                    w['auto_add_name'] = None
                     updated = True
             if updated:
                 save_wallets(data)
@@ -127,7 +133,9 @@ def add_wallet(address, min_sol=0.0, max_sol=1000000.0, name=None):
         'max_sol': max_sol,
         'is_active': True,
         'alert_in': True,
-        'alert_out': True
+        'alert_out': True,
+        'auto_add_amount': None,
+        'auto_add_name': None
     })
     save_wallets(wallets)
     new_index = len(wallets) - 1
@@ -192,6 +200,15 @@ def update_wallet_max(index, max_sol):
         return True
     return False
 
+def update_wallet_autoadd(index, amount, name):
+    wallets = load_wallets()
+    if 0 <= index < len(wallets):
+        wallets[index]['auto_add_amount'] = amount
+        wallets[index]['auto_add_name'] = name
+        save_wallets(wallets)
+        return True
+    return False
+
 # --- Alarm State (Single User / Global) ---
 
 def get_alarm_state():
@@ -203,7 +220,7 @@ def get_alarm_state():
             
             # If data is a boolean or somehow corrupted, return default
             if not isinstance(data, dict):
-                return {'is_active': False, 'current_tx': None, 'bot_paused': False}
+                return {'is_active': False, 'current_tx': None, 'bot_paused': False, 'pause_start_time': None, 'pause_end_time': None}
                 
             # If it looks like the old multi-user format (where keys are chat_ids, which are numeric strings)
             # and it doesn't have 'is_active' at the root
@@ -215,13 +232,17 @@ def get_alarm_state():
                         with open(ALARM_STATE_FILE, 'w', encoding='utf-8') as wf:
                             json.dump(state, wf, indent=4)
                         return state
-                return {'is_active': False, 'current_tx': None, 'bot_paused': False}
+                return {'is_active': False, 'current_tx': None, 'bot_paused': False, 'pause_start_time': None, 'pause_end_time': None}
                 
             if 'bot_paused' not in data:
                 data['bot_paused'] = False
+            if 'pause_start_time' not in data:
+                data['pause_start_time'] = None
+            if 'pause_end_time' not in data:
+                data['pause_end_time'] = None
             return data
     except (FileNotFoundError, json.JSONDecodeError):
-        return {'is_active': False, 'current_tx': None, 'bot_paused': False}
+        return {'is_active': False, 'current_tx': None, 'bot_paused': False, 'pause_start_time': None, 'pause_end_time': None}
 
 def set_alarm_state(is_active, current_tx=None):
     """Set global alarm state."""
@@ -244,6 +265,14 @@ def toggle_bot_pause():
     with open(ALARM_STATE_FILE, 'w', encoding='utf-8') as f:
         json.dump(state, f, indent=4)
     return state['bot_paused']
+
+def update_schedule(start_time, end_time):
+    """Updates the night mode schedule."""
+    state = get_alarm_state()
+    state['pause_start_time'] = start_time
+    state['pause_end_time'] = end_time
+    with open(ALARM_STATE_FILE, 'w', encoding='utf-8') as f:
+        json.dump(state, f, indent=4)
 
 def add_spam_message_id(msg_id):
     """Add a spam message ID to the list to be deleted later."""
