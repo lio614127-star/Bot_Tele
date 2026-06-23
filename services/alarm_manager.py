@@ -49,7 +49,7 @@ def alarm_worker_loop():
                         requests.post(f"https://ntfy.sh/{ntfy_topic}",
                             data=payload_text.encode('utf-8'),
                             headers={
-                                "Title": "BÁO ĐỘNG GIAO DỊCH!",
+                                "Title": "BÁO ĐỘNG GIAO DỊCH!".encode('utf-8'),
                                 "Priority": "5",
                                 "Tags": "rotating_light,warning"
                             },
