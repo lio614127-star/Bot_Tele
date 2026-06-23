@@ -45,7 +45,7 @@ def alarm_worker_loop():
                 ntfy_topic = os.getenv('NTFY_TOPIC')
                 if ntfy_topic:
                     try:
-                        payload_text = f"Ví {name} vừa có giao dịch {direction} số lượng {amount:.4f} SOL. Mở Telegram để xem chi tiết và tắt báo động!"
+                        payload_text = f"[{name}] vừa có giao dịch {direction} số lượng {amount:.4f} SOL. Mở Telegram để xem chi tiết và tắt báo động!"
                         requests.post(f"https://ntfy.sh/{ntfy_topic}",
                             data=payload_text.encode('utf-8'),
                             headers={
