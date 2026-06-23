@@ -43,7 +43,7 @@ export default function App() {
       
       if (data.error) {
         setErrorMsg(data.error)
-        setNodes([{ id: 'err', position: { x: 250, y: 200 }, data: { label: `❌ Lỗi: ${data.error} (Thiếu Helius API Key?)` }, style: { backgroundColor: '#ef4444', color: '#fff' } }])
+        setNodes([{ id: 'err', position: { x: 250, y: 200 }, data: { label: `❌ Lỗi: ${data.error} (Thiếu Helius API Key?)` }, style: { backgroundColor: '#ef4444', color: '#fff' } } as any])
         setEdges([])
         return
       }
@@ -57,7 +57,7 @@ export default function App() {
         setNodes(data.nodes)
         setEdges(formattedEdges)
       } else {
-        setNodes([{ id: 'empty', position: { x: 250, y: 200 }, data: { label: 'Không tìm thấy giao dịch chuyển tiền nào!' }, style: { backgroundColor: '#f59e0b', color: '#fff' } }])
+        setNodes([{ id: 'empty', position: { x: 250, y: 200 }, data: { label: 'Không tìm thấy giao dịch chuyển tiền nào!' }, style: { backgroundColor: '#f59e0b', color: '#fff' } } as any])
         setEdges([])
       }
     } catch (e: any) {
