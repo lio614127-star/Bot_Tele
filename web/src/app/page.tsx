@@ -2,7 +2,7 @@
 
 import { useState, useCallback } from 'react'
 import useSWR from 'swr'
-import { Activity, Settings, Zap, Shield, Search, Loader2, Edit3 } from 'lucide-react'
+import { Activity, Settings, Zap, Shield, Search, Loader2, Edit3, Copy, CheckCircle2 } from 'lucide-react'
 import { ReactFlow, Background, Controls, useNodesState, useEdgesState, MarkerType } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 
@@ -20,7 +20,14 @@ export default function App() {
   const [errorMsg, setErrorMsg] = useState('')
   const [nodes, setNodes, onNodesChange] = useNodesState([{ id: '1', position: { x: 250, y: 200 }, data: { label: 'Chưa có dữ liệu quét' } }])
   const [edges, setEdges, onEdgesChange] = useEdgesState([])
+  const [copiedAddress, setCopiedAddress] = useState<string | null>(null)
   
+  const handleCopy = (addr: string) => {
+    navigator.clipboard.writeText(addr)
+    setCopiedAddress(addr)
+    setTimeout(() => setCopiedAddress(null), 2000)
+  }
+
   const [showAddModal, setShowAddModal] = useState(false)
   const [newWallet, setNewWallet] = useState({ address: '', name: '', min_sol: 0.1, max_sol: 100 })
 
@@ -186,7 +193,12 @@ export default function App() {
                     <div key={idx} className="bg-gray-900 border border-gray-800 p-4 rounded-xl flex items-center justify-between hover:border-gray-700 transition-colors">
                       <div>
                         <h3 className="font-medium text-gray-200">{w.name || 'Ví chưa đặt tên'}</h3>
-                        <code className="text-xs text-gray-500 mt-1 block">{w.address}</code>
+                        <div className="flex items-center space-x-2 mt-1">
+                          <code className="text-xs text-gray-500">{w.address}</code>
+                          <button onClick={() => handleCopy(w.address)} className="text-gray-500 hover:text-cyan-400 transition-colors" title="Copy">
+                            {copiedAddress === w.address ? <CheckCircle2 className="w-3.5 h-3.5 text-green-500" /> : <Copy className="w-3.5 h-3.5" />}
+                          </button>
+                        </div>
                       </div>
                       <div className="text-right">
                         <div className="text-sm text-gray-400">Min: {w.min_sol} - Max: {w.max_sol} SOL</div>
