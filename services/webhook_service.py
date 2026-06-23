@@ -85,11 +85,22 @@ def process_helius_webhook(payload):
                             
                             auto_add_min = wallet.get('auto_add_min')
                             auto_add_max = wallet.get('auto_add_max')
+                            auto_add_list = wallet.get('auto_add_list')
                             auto_add_name = wallet.get('auto_add_name')
                             
                             is_auto_added = False
-                            if is_new and auto_add_min is not None and auto_add_max is not None and auto_add_name:
-                                if auto_add_min <= amount_sol <= auto_add_max:
+                            if is_new and auto_add_name:
+                                matched_auto_add = False
+                                if auto_add_min is not None and auto_add_max is not None:
+                                    if auto_add_min <= amount_sol <= auto_add_max:
+                                        matched_auto_add = True
+                                elif auto_add_list:
+                                    for target_amt in auto_add_list:
+                                        if abs(amount_sol - target_amt) <= 0.05:
+                                            matched_auto_add = True
+                                            break
+                                            
+                                if matched_auto_add:
                                     new_name = f"{auto_add_name}_{to_user[:4]}"
                                     from utils.persistence import add_wallet
                                     success, note, new_idx = add_wallet(to_user, 0.0, 1000.0, new_name)

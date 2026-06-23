@@ -155,9 +155,15 @@ def render_wallet_detail(index):
     
     auto_min = w.get('auto_add_min')
     auto_max = w.get('auto_add_max')
+    auto_list = w.get('auto_add_list')
     auto_name = w.get('auto_add_name')
-    if auto_min is not None and auto_max is not None and auto_name:
-        msg += f"🤖 <b>Auto-Add:</b> {auto_min} -> {auto_max} SOL (Tên: <code>{auto_name}</code>)"
+    if auto_name:
+        if auto_list:
+            msg += f"🤖 <b>Auto-Add:</b> [{', '.join(str(x) for x in auto_list)}] SOL -> <code>{auto_name}</code>"
+        elif auto_min is not None and auto_max is not None:
+            msg += f"🤖 <b>Auto-Add:</b> {auto_min} -> {auto_max} SOL -> <code>{auto_name}</code>"
+        else:
+            msg += f"🤖 <b>Auto-Add:</b> Tắt"
     else:
         msg += f"🤖 <b>Auto-Add:</b> Tắt"
     
@@ -284,29 +290,31 @@ def handle_webhook(payload):
             elif user_state.startswith('WAITING_AUTOADD_'):
                 index = int(user_state.split('_')[2])
                 if text.strip().lower() == 'off' or text.strip().lower() == 'tắt':
-                    update_wallet_autoadd(index, None, None, None)
+                    update_wallet_autoadd(index, None, None, None, None)
                     send_message("✅ Đã tắt tính năng Auto-Add cho ví này.")
                 else:
                     parts = text.strip().split()
                     if len(parts) >= 2:
                         try:
-                            # If they entered "2.0 5.0 Vi_Phu"
-                            if len(parts) >= 3 and parts[0].replace('.', '', 1).isdigit() and parts[1].replace('.', '', 1).isdigit():
-                                min_amt = float(parts[0])
-                                max_amt = float(parts[1])
-                                name = " ".join(parts[2:])
-                                update_wallet_autoadd(index, min_amt, max_amt, name)
-                                send_message(f"✅ Đã cấu hình Auto-Add: Nếu ví đích mới nhận trong khoảng {min_amt} đến {max_amt} SOL, sẽ tự động lưu với tên '{name}'.")
-                            else:
-                                # Exact amount logic (fallback) "2.1 Vi_Phu"
-                                amt = float(parts[0])
+                            # Range syntax: "2.0-5.0 Vi_Phu"
+                            if '-' in parts[0]:
+                                range_parts = parts[0].split('-')
+                                min_amt = float(range_parts[0])
+                                max_amt = float(range_parts[1])
                                 name = " ".join(parts[1:])
-                                update_wallet_autoadd(index, amt - 0.05, amt + 0.05, name)
-                                send_message(f"✅ Đã cấu hình Auto-Add: Nếu ví đích mới nhận đúng ~{amt} SOL (+/- 0.05), sẽ tự động lưu với tên '{name}'.")
+                                update_wallet_autoadd(index, min_amt, max_amt, None, name)
+                                send_message(f"✅ Đã cấu hình Auto-Add (Khoảng): {min_amt} đến {max_amt} SOL -> '{name}'.")
+                            else:
+                                # Exact list syntax: "2.1 3 3.2 Vi_Phu"
+                                name = parts[-1]
+                                exact_list = [float(x) for x in parts[:-1]]
+                                update_wallet_autoadd(index, None, None, exact_list, name)
+                                list_str = ", ".join(str(x) for x in exact_list)
+                                send_message(f"✅ Đã cấu hình Auto-Add (Chính xác): Bắt các mức SOL [{list_str}] (±0.05) -> '{name}'.")
                         except ValueError:
                             send_message("❌ Định dạng số SOL không hợp lệ.")
                     else:
-                        send_message("❌ Vui lòng nhập đúng cú pháp: `Số_SOL Tên_Ví` HOẶC `Min_SOL Max_SOL Tên_Ví`")
+                        send_message("❌ Vui lòng nhập đúng cú pháp.")
                         
                 msg, reply_markup = render_wallet_detail(index)
                 send_message(msg, reply_markup)
@@ -578,11 +586,11 @@ def handle_webhook(payload):
                 "🤖 <b>CÀI ĐẶT AUTO-ADD VÍ CON</b>\n\n"
                 "Bạn có 2 cách cài đặt:\n\n"
                 "<b>1. Theo khoảng Min - Max:</b>\n"
-                "<code>Min_SOL Max_SOL Tên_Ví</code>\n"
-                "(VD: <code>2.0 5.0 Vi_Phu</code> - Bắt các lệnh từ 2 đến 5 SOL)\n\n"
-                "<b>2. Theo 1 số chính xác (± 0.05 fee):</b>\n"
-                "<code>Số_SOL Tên_Ví</code>\n"
-                "(VD: <code>2.1 Vi_Phu</code> - Bắt các lệnh đúng ~2.1 SOL)\n\n"
+                "<code>Min_SOL-Max_SOL Tên_Ví</code>\n"
+                "(VD: <code>2.0-5.0 Vi_Phu</code> - Bắt các lệnh từ 2 đến 5 SOL)\n\n"
+                "<b>2. Theo danh sách các số chính xác (±0.05 fee):</b>\n"
+                "<code>Số_1 Số_2 Số_3 Tên_Ví</code>\n"
+                "(VD: <code>2.1 3 3.2 Vi_Phu</code> - Bắt các lệnh đúng ~2.1, 3.0, hoặc 3.2 SOL)\n\n"
                 "👉 Để TẮT tính năng này, nhắn: <code>off</code>", 
                 reply_markup=reply_markup
             )

@@ -104,6 +104,9 @@ def load_wallets():
                         w['auto_add_min'] = None
                         w['auto_add_max'] = None
                     updated = True
+                if 'auto_add_list' not in w:
+                    w['auto_add_list'] = None
+                    updated = True
                 if 'auto_add_name' not in w:
                     w['auto_add_name'] = None
                     updated = True
@@ -142,6 +145,7 @@ def add_wallet(address, min_sol=0.0, max_sol=1000000.0, name=None):
         'alert_out': True,
         'auto_add_min': None,
         'auto_add_max': None,
+        'auto_add_list': None,
         'auto_add_name': None
     })
     save_wallets(wallets)
@@ -207,11 +211,12 @@ def update_wallet_max(index, max_sol):
         return True
     return False
 
-def update_wallet_autoadd(index, min_amt, max_amt, name):
+def update_wallet_autoadd(index, min_amt, max_amt, exact_list, name):
     wallets = load_wallets()
     if 0 <= index < len(wallets):
         wallets[index]['auto_add_min'] = min_amt
         wallets[index]['auto_add_max'] = max_amt
+        wallets[index]['auto_add_list'] = exact_list
         wallets[index]['auto_add_name'] = name
         save_wallets(wallets)
         return True
